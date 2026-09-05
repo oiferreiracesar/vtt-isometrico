@@ -1,6 +1,12 @@
 // js/engine.js - Configuração Core do 3D e Câmera Isométrica
 export const canvas = document.getElementById('canvas3d');
+
+// --- BLOQUEIO DE MENUS NATIVOS DO NAVEGADOR ---
 canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('mousedown', e => {
+    // Impede o navegador de interpretar atalhos nativos com Ctrl e Shift no clique
+    if (e.ctrlKey || e.shiftKey) e.preventDefault();
+});
 
 export const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x14120f);
@@ -34,8 +40,8 @@ export function atualizarCamera() {
 }
 atualizarCamera();
 
-// --- ILUMINAÇÃO DE ESTÚDIO (Clara de todos os ângulos) ---
-scene.add(new THREE.AmbientLight(0xffffff, 0.8)); // Luz base forte
+// --- ILUMINAÇÃO DE ESTÚDIO ---
+scene.add(new THREE.AmbientLight(0xffffff, 0.8)); 
 
 const luzPrincipal = new THREE.DirectionalLight(0xffffff, 0.8);
 luzPrincipal.position.set(20, 30, 20);
