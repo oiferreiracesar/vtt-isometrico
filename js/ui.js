@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML
+// js/ui.js - Gerenciamento da Interface HTML (Com Pipeta Inteligente)
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarLarguraEscada } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -15,14 +15,9 @@ export function showAviso(msg) {
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-// O GIZMO DO THE SIMS (POPUP)
 export function mostrarGizmo(x, y) {
     const g = document.getElementById('room-gizmo');
-    if(g) {
-        g.style.display = 'flex';
-        g.style.left = (x - 120) + 'px'; // Ajustado para centralizar com os botões extras
-        g.style.top = (y - 70) + 'px'; 
-    }
+    if(g) { g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; }
 }
 
 export function esconderGizmo() {
@@ -35,6 +30,25 @@ export let idPaletaSelecionada = null;
 let proximoIdPaleta = 1;
 
 export function itemSelecionadoAtual() { return paleta.find(p => p.id === idPaletaSelecionada) || null; }
+
+// A MÁGICA DA PIPETA ACONTECE AQUI
+export function selecionarMaterialNaPaleta(matAlvo) {
+  if (!matAlvo) return;
+  let match = null;
+  if (matAlvo.map) {
+      match = paleta.find(p => p.tipo === 'imagem' && p.textura && p.textura.uuid === matAlvo.map.uuid);
+  } else if (matAlvo.color) {
+      const hex = '#' + matAlvo.color.getHexString();
+      match = paleta.find(p => p.tipo === 'cor' && p.cor.toLowerCase() === hex.toLowerCase());
+  }
+  if (match) {
+      idPaletaSelecionada = match.id;
+      renderizarPaleta();
+      showAviso("🎨 Pipeta: Textura copiada para o balde!");
+  } else {
+      showAviso("Material não encontrado na paleta base.");
+  }
+}
 
 function renderizarPaleta() {
   const div = document.getElementById('paletaTexturas');
@@ -88,10 +102,7 @@ export function iniciarUI() {
   function ativarFerramenta(botaoId, modo, msg) {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('ativo'));
     const btn = document.getElementById(botaoId); if(btn) btn.classList.add('ativo');
-    
-    setModoAtivo(modo); 
-    atualizarVisibilidadeAndares(); 
-    if(msg) showAviso(msg);
+    setModoAtivo(modo); atualizarVisibilidadeAndares(); if(msg) showAviso(msg);
   }
 
   const simsPanel = document.getElementById('sims-panel');
@@ -102,20 +113,11 @@ export function iniciarUI() {
       const isAlreadyActive = btn.classList.contains('active');
       document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.sub-panel').forEach(panel => panel.classList.remove('active'));
-      if (isAlreadyActive) { 
-          if(simsPanel) simsPanel.style.display = 'none'; 
-          ativarFerramenta('btnSairModo', null, 'Menu recolhido.'); 
-      } 
-      else { 
-          btn.classList.add('active'); 
-          const target = document.getElementById(btn.getAttribute('data-target'));
-          if (target) target.classList.add('active'); 
-          if(simsPanel) simsPanel.style.display = 'flex'; 
-      }
+      if (isAlreadyActive) { if(simsPanel) simsPanel.style.display = 'none'; ativarFerramenta('btnSairModo', null, 'Menu recolhido.'); } 
+      else { btn.classList.add('active'); const target = document.getElementById(btn.getAttribute('data-target')); if (target) target.classList.add('active'); if(simsPanel) simsPanel.style.display = 'flex'; }
     });
   });
 
-  // BOTÕES DE HISTÓRICO E GIZMO (AGORA GENÉRICOS PARA ESCADA E CÔMODO)
   document.getElementById('btnDesfazer')?.addEventListener('click', desfazer);
   document.getElementById('btnRefazer')?.addEventListener('click', refazer);
 
@@ -123,19 +125,16 @@ export function iniciarUI() {
   document.getElementById('gizmoRotLeft')?.addEventListener('click', () => girarSelecionado('esq'));
   document.getElementById('gizmoRotRight')?.addEventListener('click', () => girarSelecionado('dir'));
   document.getElementById('gizmoDelete')?.addEventListener('click', deletarSelecionado);
-  
-  // NOVOS BOTÕES DE LARGURA DE ESCADA
   document.getElementById('gizmoWiden')?.addEventListener('click', () => alterarLarguraEscada(1));
   document.getElementById('gizmoShrink')?.addEventListener('click', () => alterarLarguraEscada(-1));
 
-  // FERRAMENTAS
   document.getElementById('btnModoParede')?.addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
   document.getElementById('btnModoCerca')?.addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
   document.getElementById('btnModoRetangulo')?.addEventListener('click', () => ativarFerramenta('btnModoRetangulo', 'retangulo', 'Sala Retangular: Clique e arraste.'));
   document.getElementById('btnModoTriangulo')?.addEventListener('click', () => ativarFerramenta('btnModoTriangulo', 'triangulo', 'Sala Triangular: Clique e arraste.'));
   document.getElementById('btnModoOctogono')?.addEventListener('click', () => ativarFerramenta('btnModoOctogono', 'octogono', 'Sala Octogonal: Clique e arraste.'));
   document.getElementById('btnModoPorta')?.addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
-  document.getElementById('btnModoPintura')?.addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo, Ctrl = Remover)'));
+  document.getElementById('btnModoPintura')?.addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo, Ctrl = Remover, Alt = Pipeta)'));
   
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada: Arraste para o sentido que ela sobe.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));

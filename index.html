@@ -15,20 +15,19 @@
 
   <div id="hint">Navegação isométrica: Botão do Meio (arrastar) ou Scroll (zoom)</div>
   <div id="fpsbadge"></div>
+  
+  <!-- MEDIDOR DE CURSOR DINÂMICO -->
+  <div id="cursor-medida" style="display:none; position:absolute; color:#fff; background:rgba(0,0,0,0.8); border:1px solid #38bdf8; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:bold; pointer-events:none; z-index:9999; box-shadow: 0 4px 6px rgba(0,0,0,0.5);"></div>
 
   <!-- POPUP FLUTUANTE (GIZMO THE SIMS 4) -->
   <div id="room-gizmo" style="display: none; position: absolute; padding: 6px; background: rgba(15, 23, 32, 0.9); backdrop-filter: blur(8px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 12px; gap: 6px; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
     <button class="tool-btn" id="gizmoMove" title="Mover" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">✥</button>
     <button class="tool-btn" id="gizmoRotLeft" title="Girar Esquerda" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">↶</button>
     <button class="tool-btn" id="gizmoRotRight" title="Girar Direita" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">↷</button>
-    
     <div style="width: 1px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
-    
     <button class="tool-btn" id="gizmoWiden" title="Aumentar Largura (+)" style="width: 36px; height: 36px; font-size: 16px; margin: 0; color: #4ade80;">➕</button>
     <button class="tool-btn" id="gizmoShrink" title="Diminuir Largura (-)" style="width: 36px; height: 36px; font-size: 16px; margin: 0; color: #facc15;">➖</button>
-    
     <div style="width: 1px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
-
     <button class="tool-btn" id="gizmoDelete" title="Deletar" style="width: 36px; height: 36px; font-size: 16px; margin: 0; background: rgba(255,50,50,0.2); border-color: #ff4444;">🗑️</button>
   </div>
 
@@ -75,7 +74,7 @@
           <button class="tool-btn" id="btnModoTriangulo" title="Sala Triangular (Arraste)">🔺</button>
           <button class="tool-btn" id="btnModoOctogono" title="Sala Octogonal (Arraste)">🛑</button>
           <button class="tool-btn" id="btnModoPorta" title="Portas/Janelas (Gruda na Parede)">🚪</button>
-          <button class="tool-btn" id="btnModoPintura" title="Pintura (Ctrl = Borracha, Shift = Cômodo Inteiro)">🎨</button>
+          <button class="tool-btn" id="btnModoPintura" title="Pintura (Shift = Tudo, Ctrl = Borracha, Alt = Conta-gotas)">🎨</button>
           <button class="tool-btn ativo" id="btnSairModo" title="Navegar / Selecionar">🖐️</button>
         </div>
         
