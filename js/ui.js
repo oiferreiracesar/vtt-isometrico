@@ -74,7 +74,7 @@ export function iniciarUI() {
     const btn = document.getElementById(botaoId); if(btn) btn.classList.add('ativo');
     
     setModoAtivo(modo); 
-    atualizarVisibilidadeAndares(); // FORÇA A ATUALIZAÇÃO DO FANTASMA
+    atualizarVisibilidadeAndares(); 
     if(msg) showAviso(msg);
   }
 
@@ -91,6 +91,9 @@ export function iniciarUI() {
     });
   });
 
+  // NOVO MODO DE SELEÇÃO E GRUPO
+  document.getElementById('btnModoSelecao').addEventListener('click', () => ativarFerramenta('btnModoSelecao', 'selecao', 'Seleção: Clique e segure para Mover o cômodo pelo mapa.'));
+  
   document.getElementById('btnModoParede').addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
   document.getElementById('btnModoCerca').addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
   document.getElementById('btnModoRetangulo').addEventListener('click', () => ativarFerramenta('btnModoRetangulo', 'retangulo', 'Sala Retangular: Clique e arraste.'));
