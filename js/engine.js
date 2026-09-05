@@ -11,10 +11,6 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-// HABILITANDO O MOTOR DE SOMBRAS (O Segredo do Breu)
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
 const tamCena = 15; 
 export let configsCamera = { zoom: 1, angulo: Math.PI / 4, nivel: 0 };
 export const orbitAlvo = new THREE.Vector3(0, 0, 0);
@@ -38,23 +34,16 @@ export function atualizarCamera() {
 }
 atualizarCamera();
 
-// --- ILUMINAÇÃO DINÂMICA (The Sims Style) ---
-// Luz Ambiente muito fraca, assim salas fechadas viram um breu
-scene.add(new THREE.AmbientLight(0x20202a, 0.2)); 
+// --- ILUMINAÇÃO DE ESTÚDIO (Clara de todos os ângulos) ---
+scene.add(new THREE.AmbientLight(0xffffff, 0.8)); // Luz base forte
 
-// O Sol (Direcional) que projeta sombras nítidas
-const sol = new THREE.DirectionalLight(0xffeedd, 2.0);
-sol.position.set(20, 30, 20);
-sol.castShadow = true;
-sol.shadow.mapSize.width = 2048; // Alta resolução de sombra
-sol.shadow.mapSize.height = 2048;
-sol.shadow.camera.left = -40;
-sol.shadow.camera.right = 40;
-sol.shadow.camera.top = 40;
-sol.shadow.camera.bottom = -40;
-sol.shadow.camera.far = 100;
-sol.shadow.bias = -0.001; // Evita falhas pontilhadas na sombra
-scene.add(sol);
+const luzPrincipal = new THREE.DirectionalLight(0xffffff, 0.8);
+luzPrincipal.position.set(20, 30, 20);
+scene.add(luzPrincipal);
+
+const luzSecundaria = new THREE.DirectionalLight(0xffffff, 0.5);
+luzSecundaria.position.set(-20, 30, -20);
+scene.add(luzSecundaria);
 
 window.addEventListener('resize', () => {
   atualizarCamera();
