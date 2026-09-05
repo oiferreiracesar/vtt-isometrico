@@ -68,22 +68,18 @@ canvas.addEventListener('pointerdown', e => {
     const hit = raycastParedesEPisos(e.clientX, e.clientY);
     if (hit && hit.object !== meshChaoBase) {
       scene.remove(hit.object);
-      
       const idxParede = paredesConstruidas.findIndex(p => p.mesh === hit.object);
       if (idxParede > -1) paredesConstruidas.splice(idxParede, 1);
-      
       const idxPiso = pisosConstruidos.findIndex(p => p.mesh === hit.object);
       if (idxPiso > -1) pisosConstruidos.splice(idxPiso, 1);
-      
       showAviso("🗑️ Objeto demolido!");
     }
     return;
   }
 
-  // Se apertou Alt, ignora (usado para mover a câmera)
   if (e.altKey) return; 
 
-  // 2. INICIAR ARRASTE DE SALA/PAREDE
+  // 2. INICIAR ARRASTE
   if (['parede', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) {
     const hit = raycastChao(e.clientX, e.clientY);
     if (hit) {
@@ -114,8 +110,9 @@ canvas.addEventListener('pointerdown', e => {
 
     const isParede = paredesConstruidas.some(p => p.mesh === hitAll.object);
     
-    // PINTAR COM SHIFT (PREENCHER CÔMODO)
+    // PINTAR COM SHIFT (PREENCHER CÔMODO OU FACHADA)
     if (e.shiftKey) {
+      // Como a parede tem espessura, o clique detecta perfeitamente se você tocou na face de dentro ou de fora!
       const centroX = snapCentroCelula(hitAll.point.x);
       const centroZ = snapCentroCelula(hitAll.point.z);
       const { celulas } = encontrarAreaFechada(centroX, centroZ);
@@ -131,18 +128,17 @@ canvas.addEventListener('pointerdown', e => {
                  const normalFace0 = new THREE.Vector3(1, 0, 0).applyQuaternion(p.mesh.quaternion);
                  const dirParaCelula = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z);
                  const faceInterna = normalFace0.dot(dirParaCelula) > 0 ? 0 : 1;
-                 
                  aplicarMaterialNaFace(p.mesh, faceInterna, item);
               }
            });
          });
-         showAviso("🎨 Papel de parede aplicado na sala inteira!");
+         showAviso("🎨 Paredes pintadas de uma vez!");
       } else {
          celulas.forEach(c => aplicarPiso(c.x, c.z, item));
-         showAviso("🎨 Piso aplicado na sala inteira!");
+         showAviso("🎨 Chão pintado de uma vez!");
       }
     } 
-    // PINTAR APENAS UM LADO DA PAREDE (CLIQUE SIMPLES)
+    // PINTAR APENAS UM QUADRADO DA PAREDE OU DO CHÃO (CLIQUE SIMPLES)
     else {
       if (isParede) {
         const parede = paredesConstruidas.find(p => p.mesh === hitAll.object);
@@ -180,7 +176,6 @@ canvas.addEventListener('pointermove', e => {
       if (modoAtivo === 'parede') {
         const dx = px - pontoA.x, dz = pz - pontoA.z;
         const comp = Math.sqrt(dx*dx + dz*dz) || 0.01;
-        // Ajuste fino de 0.248 para evitar o Z-Fighting visual
         previaMesh.scale.set(0.25, obterAltura(), comp + 0.248);
         previaMesh.position.set((pontoA.x + px)/2, obterAltura()/2, (pontoA.z + pz)/2);
         previaMesh.rotation.y = Math.atan2(dx, dz);
@@ -204,7 +199,7 @@ window.addEventListener('pointerup', e => {
     if (hit) {
       const px = snapGrid(hit.point.x), pz = snapGrid(hit.point.z);
       if (Math.abs(px - pontoA.x) > 0.1 || Math.abs(pz - pontoA.z) > 0.1) {
-        if (modoAtivo === 'parede') criarSegmentoParede(pontoA.x, pontoA.z, px, pz, obterAltura(), 0.248);
+        if (modoAtivo === 'parede') criarLinhaDeParedes(pontoA.x, pontoA.z, px, pz, obterAltura());
         else if (modoAtivo === 'retangulo') criarRetangulo(pontoA.x, pontoA.z, px, pz, obterAltura());
         else if (modoAtivo === 'triangulo') criarTriangulo(pontoA.x, pontoA.z, px, pz, obterAltura());
         else if (modoAtivo === 'octogono') criarOctogono(pontoA.x, pontoA.z, px, pz, obterAltura());
@@ -217,9 +212,19 @@ window.addEventListener('pointerup', e => {
 });
 
 // ----------------------------------------------------
-// FUNÇÕES DE CRIAÇÃO GEOMÉTRICA (COM AJUSTE DE Z-FIGHTING)
+// FUNÇÕES DE CRIAÇÃO GEOMÉTRICA (SUBDIVISÃO EM GRID)
 // ----------------------------------------------------
-function criarSegmentoParede(ax, az, bx, bz, altura, ajusteQuina = 0.248) {
+
+// Matemática que elimina 100% o Z-Fighting alternando microscópicamente a espessura dos blocos
+function obterEspessura(cx, cz) {
+  const hx = Math.round(cx / configMapa.tamanhoGrid - 0.5);
+  const hz = Math.round(cz / configMapa.tamanhoGrid - 0.5);
+  const hash = Math.abs(hx * 73 + hz * 31);
+  const espessuras = [0.250, 0.247, 0.244, 0.241, 0.238];
+  return espessuras[hash % 5];
+}
+
+function criarSegmentoParede(ax, az, bx, bz, altura, espessura) {
   const dx = bx - ax, dz = bz - az;
   const comp = Math.sqrt(dx*dx + dz*dz);
   if (comp < 0.05) return;
@@ -230,29 +235,51 @@ function criarSegmentoParede(ax, az, bx, bz, altura, ajusteQuina = 0.248) {
     materialParede.clone(), materialParede.clone()
   ];
 
-  // A parede recebe o ajuste matemático milimétrico para esconder a emenda
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, comp + ajusteQuina), materiais);
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(espessura, altura, comp + 0.248), materiais);
   mesh.position.set((ax+bx)/2, altura/2, (az+bz)/2);
   mesh.rotation.y = Math.atan2(dx, dz);
   scene.add(mesh);
   paredesConstruidas.push({ mesh, ax, az, bx, bz, altura, isPorta: false });
 }
 
-function criarPoligonoDeParedes(vertices, altura, ajusteQuina = 0.248) {
+// Essa função pica a parede longa que o usuário desenhou em tijolos individuais 1x1
+function criarLinhaDeParedes(ax, az, bx, bz, altura) {
+  const dx = bx - ax, dz = bz - az;
+  const compTotal = Math.hypot(dx, dz);
+  if (compTotal < 0.05) return;
+
+  const qtd = Math.max(1, Math.round(compTotal / configMapa.tamanhoGrid));
+  const stepX = dx / qtd;
+  const stepZ = dz / qtd;
+
+  for (let i = 0; i < qtd; i++) {
+    const startX = ax + stepX * i;
+    const startZ = az + stepZ * i;
+    const endX = ax + stepX * (i + 1);
+    const endZ = az + stepZ * (i + 1);
+    
+    const cx = (startX + endX) / 2;
+    const cz = (startZ + endZ) / 2;
+    const espessura = obterEspessura(cx, cz);
+    
+    criarSegmentoParede(startX, startZ, endX, endZ, altura, espessura);
+  }
+}
+
+function criarPoligonoDeParedes(vertices, altura) {
   for (let i = 0; i < vertices.length; i++) {
-    criarSegmentoParede(vertices[i].x, vertices[i].z, vertices[(i + 1) % vertices.length].x, vertices[(i + 1) % vertices.length].z, altura, ajusteQuina);
+    criarLinhaDeParedes(vertices[i].x, vertices[i].z, vertices[(i + 1) % vertices.length].x, vertices[(i + 1) % vertices.length].z, altura);
   }
 }
 
 function criarRetangulo(x1, z1, x2, z2, altura) {
   const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
-  criarPoligonoDeParedes([{ x: minX, z: minZ }, { x: maxX, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura, 0.248);
+  criarPoligonoDeParedes([{ x: minX, z: minZ }, { x: maxX, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura);
 }
 
 function criarTriangulo(x1, z1, x2, z2, altura) {
   const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
-  // Triângulos precisam de um recuo um pouco maior por causa da angulação aguda
-  criarPoligonoDeParedes([{ x: (minX + maxX) / 2, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura, 0.098);
+  criarPoligonoDeParedes([{ x: (minX + maxX) / 2, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura);
 }
 
 function criarOctogono(x1, z1, x2, z2, altura) {
@@ -261,7 +288,7 @@ function criarOctogono(x1, z1, x2, z2, altura) {
   criarPoligonoDeParedes([
     { x: minX + offX, z: minZ }, { x: maxX - offX, z: minZ }, { x: maxX, z: minZ + offZ }, { x: maxX, z: maxZ - offZ },
     { x: maxX - offX, z: maxZ }, { x: minX + offX, z: maxZ }, { x: minX, z: maxZ - offZ }, { x: minX, z: minZ + offZ }
-  ], altura, 0.098);
+  ], altura);
 }
 
 // ----------------------------------------------------
@@ -292,7 +319,6 @@ function aplicarMaterialNaFace(mesh, faceIndex, item) {
 function aplicarPiso(x, z, item) {
   let tile = pisosConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01);
   if (!tile) {
-    // O piso agora tem EXATAMENTE o tamanho do grid, sem sobreposição, eliminando o z-fighting no chão
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, 0.12, configMapa.tamanhoGrid), materialPiso.clone());
     mesh.position.set(x, 0.06, z);
     scene.add(mesh);
@@ -324,7 +350,7 @@ function encontrarAreaFechada(xInicial, zInicial) {
   const pilha = [{ x: xInicial, z: zInicial }];
   const celulas = [];
   
-  while (pilha.length && celulas.length < 2000) {
+  while (pilha.length && celulas.length < 3000) {
     const atual = pilha.pop();
     const chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`;
     
