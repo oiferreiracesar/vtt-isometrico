@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <title>Masmorra Isométrica - VTT</title>
   <link rel="stylesheet" href="style.css">
+  <script>
+    // 🚨 CAÇADOR DE BUGS: Se a tela tentar ficar preta, isso vai gritar o erro para você!
+    window.addEventListener('error', function(e) {
+      alert('🚨 ERRO FATAL DETECTADO:\n\n' + e.message + '\n\nArquivo: ' + e.filename + '\nLinha: ' + e.lineno);
+    });
+  </script>
 </head>
 <body>
   <canvas id="canvas3d"></canvas>

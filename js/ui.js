@@ -53,7 +53,6 @@ function carregarBancoDeAssets() {
 export function iniciarUI() {
   carregarBancoDeAssets();
 
-  // Uso de ?. (Optional Chaining) impede que a engine congele se algum botão não existir no HTML!
   document.getElementById('btnAdicionarTextura')?.addEventListener('click', () => document.getElementById('inputAdicionarTextura').click());
   document.getElementById('inputAdicionarTextura')?.addEventListener('change', e => {
     Array.from(e.target.files || []).forEach(arquivo => {
@@ -101,11 +100,9 @@ export function iniciarUI() {
     });
   });
 
-  // BOTÕES DE HISTÓRICO
   document.getElementById('btnDesfazer')?.addEventListener('click', desfazer);
   document.getElementById('btnRefazer')?.addEventListener('click', refazer);
 
-  // FERRAMENTAS
   document.getElementById('btnModoSelecao')?.addEventListener('click', () => ativarFerramenta('btnModoSelecao', 'selecao', 'Seleção: Clique e segure para Mover o cômodo pelo mapa.'));
   document.getElementById('btnModoParede')?.addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
   document.getElementById('btnModoCerca')?.addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));

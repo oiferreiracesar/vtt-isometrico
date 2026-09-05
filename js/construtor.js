@@ -1,10 +1,10 @@
-// js/construtor.js - Múltiplos Andares, Cômodos e HISTÓRICO (Blindado contra Bugs)
+// js/construtor.js - Múltiplos Andares, Cômodos e SISTEMA DE HISTÓRICO (Undo/Redo BLINDADO)
 import { scene, camera, canvas, configsCamera } from './engine.js';
 import { configMapa, meshChaoBase } from './mapa.js';
 import { showAviso, itemSelecionadoAtual } from './ui.js';
 
 export let modoAtivo = null;
-export let modoVisaoAtual = 'full'; // Variável EXPORTADA para nunca mais dar erro de sintaxe!
+export let modoVisaoAtual = 'full'; 
 
 export const comodosConstruidos = []; 
 export const paredesConstruidas = [];
@@ -152,7 +152,7 @@ const raycaster = new THREE.Raycaster(); const mouseNdc = new THREE.Vector2();
 
 function snapGrid(valor) { return Math.round(valor / configMapa.tamanhoGrid) * configMapa.tamanhoGrid; }
 function snapCentroCelula(valor) { return Math.floor(valor / configMapa.tamanhoGrid) * configMapa.tamanhoGrid + configMapa.tamanhoGrid / 2; }
-function obterAltura() { return parseFloat(document.getElementById('inputAlturaParede').value) || 3; }
+function obterAltura() { return parseFloat(document.getElementById('inputAlturaParede')?.value) || 3; }
 
 function raycastPlanoBase(clientX, clientY) {
   mouseNdc.x = (clientX / window.innerWidth) * 2 - 1; mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -196,7 +196,6 @@ function removerObjetoMundo(tipo, obj, arrayBase) {
     }
 }
 
-// MARRETA INTELIGENTE (Ignora chão no modo de desenho)
 function executarMarreta(hitObject) {
   if (!hitObject || hitObject === meshChaoBase) return;
   const isPiso = pisosConstruidos.some(p => p.mesh === hitObject);
@@ -226,7 +225,7 @@ function executarMarreta(hitObject) {
 // ----------------------------------------------------
 // INTERAÇÕES PRINCIPAIS E MOUSE
 // ----------------------------------------------------
-canvas.addEventListener('pointerdown', e => {
+canvas?.addEventListener('pointerdown', e => {
   if ((e.button !== 0 && !(e.button === 2 && e.ctrlKey)) || !modoAtivo) return;
   iniciarAcao();
 
@@ -363,7 +362,7 @@ canvas.addEventListener('pointerdown', e => {
   }
 });
 
-canvas.addEventListener('pointermove', e => {
+canvas?.addEventListener('pointermove', e => {
   if (!modoAtivo) return;
 
   if (e.buttons === 1 && e.ctrlKey && modoAtivo !== 'pintura' && modoAtivo !== 'selecao') {
@@ -440,7 +439,7 @@ window.addEventListener('pointerup', e => {
 });
 
 function aplicarMovimento(comodo, dx, dz) {
-    comodo.paredes.forEach(p => { p.ax += dx; p.az += dz; p.bx += dx; p.bz += dz; p.mesh.position.x += dx; p.mesh.position.z += dz; });
+    comodo.paredes.forEach(p => { p.ax += dx; p.az += dz; p.bx += dx; p.bz += dx; p.mesh.position.x += dx; p.mesh.position.z += dz; });
     comodo.pilares.forEach(p => { p.x += dx; p.z += dz; p.mesh.position.x += dx; p.mesh.position.z += dz; });
 }
 
