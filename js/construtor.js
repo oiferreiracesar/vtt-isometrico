@@ -321,7 +321,7 @@ canvas?.addEventListener('pointerdown', e => {
       return;
   }
 
-  // O CLIQUE INTELIGENTE DO MODO NAVEGAR (ModoAtivo === null) E SETAS DE ESTICAR
+  // O CLIQUE INTELIGENTE DO MODO NAVEGAR E SETAS DE ESTICAR
   if (!modoAtivo && e.button === 0 && !e.altKey && !e.ctrlKey && !e.shiftKey) {
       
       if (grupoSetas.visible) {
@@ -383,7 +383,7 @@ canvas?.addEventListener('pointerdown', e => {
      return;
   }
 
-  // --- NOVA LÓGICA CIRÚRGICA DE PINTURA ---
+  // --- LÓGICA CIRÚRGICA DE PINTURA ---
   if (modoAtivo === 'pintura') {
       const isRemocao = e.ctrlKey; 
       const item = itemSelecionadoAtual();
@@ -415,7 +415,6 @@ canvas?.addEventListener('pointerdown', e => {
           let startX = snapCentroCelula(clickPoint.x);
           let startZ = snapCentroCelula(clickPoint.z);
 
-          // Puxa o balde ligeiramente pra dentro da face clicada pra não vazar
           if (targetObject && (isParede || isPilar)) {
               const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
               const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
@@ -446,16 +445,12 @@ canvas?.addEventListener('pointerdown', e => {
              });
           } else { celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); }
       } else {
-          // CLIQUE ÚNICO: Só pinta EXATAMENTE a parede clicada (não vaza pelas quinas)
           if (targetObject && (isParede || isPilar || isColuna)) {
               const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
               const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
               const worldNormal = localNormals[faceClicada].clone().applyQuaternion(targetObject.quaternion).normalize();
-              if (isRemocao) {
-                  removerPinturaFacePorNormal(targetObject, worldNormal, materialParede);
-              } else {
-                  pintarFacePorNormalMundial(targetObject, worldNormal, item);
-              }
+              if (isRemocao) { removerPinturaFacePorNormal(targetObject, worldNormal, materialParede); } 
+              else { pintarFacePorNormalMundial(targetObject, worldNormal, item); }
           } else { 
               const cx = snapCentroCelula(clickPoint.x); const cz = snapCentroCelula(clickPoint.z);
               if (isRemocao) removerPiso(cx, cz); else aplicarPiso(cx, cz, item); 
@@ -691,7 +686,7 @@ function setOpacity(mesh, isTransparent, opacity) {
         mesh.children.forEach(child => setOpacity(child, isTransparent, opacity)); 
     } else if (Array.isArray(mesh.material)) { 
         mesh.material.forEach(m => { 
-            if (m.transparent !== isTransparent) m.needsUpdate = true; // CORREÇÃO: Exigência do Three.js para o Fantasma funcionar!
+            if (m.transparent !== isTransparent) m.needsUpdate = true; // CORREÇÃO
             m.transparent = isTransparent; 
             m.opacity = opacity; 
         }); 
@@ -708,9 +703,7 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
   
   const aplicarParede = (obj) => { 
       if (obj.nivel > configsCamera.nivel) { 
-          if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) { 
-              obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); 
-          } else { obj.mesh.visible = false; } 
+          obj.mesh.visible = false; // Paredes superiores NUNCA ficam de fantasma
       } else if (obj.nivel < configsCamera.nivel) { 
           obj.mesh.visible = true; obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, false, 1); 
       } else { 
@@ -727,6 +720,7 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
   [pisosConstruidos, escadasConstruidas].forEach(arr => { 
       arr.forEach(obj => { 
           if (obj.nivel > configsCamera.nivel) { 
+              // Fantasma se aplica APENAS para pisos e escadas
               if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) { obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); } 
               else obj.mesh.visible = false; 
           } else { 
