@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML
+// js/ui.js - Gerenciamento da Interface HTML e Paleta
 import { setModoAtivo, mudarVisaoParedes } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 
@@ -7,72 +7,112 @@ export function showAviso(msg) {
   let el = document.getElementById('avisoTemp');
   if(!el) {
     el = document.createElement('div'); el.id = 'avisoTemp';
-    el.style.cssText = 'position:absolute; bottom:40px; left:50%; transform:translateX(-50%); background:rgba(30,25,18,0.95); color:#e8dcc0; border:1px solid #38bdf8; border-radius:6px; padding:8px 16px; font-size:12px; z-index:999; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-family: sans-serif;';
+    el.style.cssText = 'position:absolute; bottom:40px; left:50%; transform:translateX(-50%); background:rgba(30,25,18,0.95); color:#e8dcc0; border:1px solid #38bdf8; border-radius:6px; padding:8px 16px; font-size:12px; z-index:999; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-family: sans-serif; pointer-events: none;';
     document.body.appendChild(el);
   }
   el.textContent = msg; el.style.display = 'block';
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
+// === SISTEMA DE PALETA (Pisos e Papel de Parede) ===
+export let paleta = [];
+export let idPaletaSelecionada = null;
+let proximoIdPaleta = 1;
+
+export function itemSelecionadoAtual() {
+  return paleta.find(p => p.id === idPaletaSelecionada) || null;
+}
+
+function renderizarPaleta() {
+  const div = document.getElementById('paletaTexturas');
+  div.innerHTML = '';
+  if (!paleta.length) { div.innerHTML = '<span class="paletaVazia">Adicione texturas ou cores.</span>'; return; }
+  paleta.forEach(item => {
+    const sw = document.createElement('div');
+    sw.className = 'swatchTextura' + (item.id === idPaletaSelecionada ? ' selecionada' : '');
+    if (item.tipo === 'cor') {
+      sw.style.backgroundImage = 'none';
+      sw.style.backgroundColor = item.cor;
+    } else {
+      sw.style.backgroundImage = `url(${item.dataUrl})`;
+    }
+    sw.onclick = () => { idPaletaSelecionada = item.id; renderizarPaleta(); };
+    div.appendChild(sw);
+  });
+}
+
 export function iniciarUI() {
+  // Inicializa Paleta
+  document.getElementById('btnAdicionarTextura').addEventListener('click', () => document.getElementById('inputAdicionarTextura').click());
+  document.getElementById('inputAdicionarTextura').addEventListener('change', e => {
+    Array.from(e.target.files || []).forEach(arquivo => {
+      const leitor = new FileReader();
+      leitor.onload = ev => {
+        const dataUrl = ev.target.result;
+        const textura = new THREE.TextureLoader().load(dataUrl);
+        textura.colorSpace = THREE.SRGBColorSpace;
+        const id = proximoIdPaleta++;
+        paleta.push({ id, tipo: 'imagem', dataUrl, textura });
+        if (idPaletaSelecionada === null) idPaletaSelecionada = id;
+        renderizarPaleta();
+        showAviso(`Material adicionado ao catálogo.`);
+      };
+      leitor.readAsDataURL(arquivo);
+    });
+  });
+
+  document.getElementById('btnAdicionarCor').addEventListener('click', () => {
+    const cor = document.getElementById('inputCorNova').value;
+    const id = proximoIdPaleta++;
+    paleta.push({ id, tipo: 'cor', cor });
+    if (idPaletaSelecionada === null) idPaletaSelecionada = id;
+    renderizarPaleta();
+    showAviso(`Cor adicionada ao catálogo.`);
+  });
+  renderizarPaleta();
+
+  // Abas e Ferramentas
   document.querySelectorAll('.node-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       document.querySelectorAll('.sub-panel').forEach(panel => panel.classList.remove('active'));
-      const targetId = btn.getAttribute('data-target');
-      const targetPanel = document.getElementById(targetId);
-      if(targetPanel) targetPanel.classList.add('active');
+      document.getElementById(btn.getAttribute('data-target')).classList.add('active');
     });
   });
 
-  function desativarFerramentas() { document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('ativo')); }
+  function ativarFerramenta(botaoId, modo, msg) {
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('ativo'));
+    document.getElementById(botaoId).classList.add('ativo');
+    setModoAtivo(modo);
+    if(msg) showAviso(msg);
+  }
 
-  document.getElementById('btnModoParede').addEventListener('click', (e) => { desativarFerramentas(); e.currentTarget.classList.add('ativo'); setModoAtivo('parede'); });
-  document.getElementById('btnModoRetangulo').addEventListener('click', (e) => { desativarFerramentas(); e.currentTarget.classList.add('ativo'); setModoAtivo('retangulo'); });
-  document.getElementById('btnModoTriangulo').addEventListener('click', (e) => { desativarFerramentas(); e.currentTarget.classList.add('ativo'); setModoAtivo('triangulo'); });
-  document.getElementById('btnModoOctogono').addEventListener('click', (e) => { desativarFerramentas(); e.currentTarget.classList.add('ativo'); setModoAtivo('octogono'); });
-  document.getElementById('btnSairModo').addEventListener('click', (e) => { desativarFerramentas(); e.currentTarget.classList.add('ativo'); setModoAtivo(null); });
+  document.getElementById('btnModoParede').addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Modo Parede: Clique e arraste. (Ctrl = Marreta)'));
+  document.getElementById('btnModoRetangulo').addEventListener('click', () => ativarFerramenta('btnModoRetangulo', 'retangulo', 'Sala Retangular: Clique e arraste.'));
+  document.getElementById('btnModoTriangulo').addEventListener('click', () => ativarFerramenta('btnModoTriangulo', 'triangulo', 'Sala Triangular: Clique e arraste.'));
+  document.getElementById('btnModoOctogono').addEventListener('click', () => ativarFerramenta('btnModoOctogono', 'octogono', 'Sala Octogonal: Clique e arraste.'));
+  document.getElementById('btnModoPorta').addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
+  document.getElementById('btnModoPintura').addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: Clique no chão/parede. (Shift = Preencher tudo)'));
+  document.getElementById('btnSairModo').addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Modo de Navegação livre.'));
 
-  // ==========================================
-  // CONTROLES DE CÂMERA E PAREDES (THE SIMS)
-  // ==========================================
+  // Ferramentas Futuras (Sims)
+  const botoesFuturos = ['btnModoTelhado', 'btnModoEscada', 'btnModoTerreno', 'btnModoAgua'];
+  botoesFuturos.forEach(id => {
+    document.getElementById(id).addEventListener('click', () => showAviso("Esta ferramenta será habilitada na próxima atualização do sistema!"));
+  });
 
-  // Zoom
+  // Câmera
   document.getElementById('camZoomIn').addEventListener('click', () => { configsCamera.zoom = Math.min(8, configsCamera.zoom + 0.5); atualizarCamera(); });
   document.getElementById('camZoomOut').addEventListener('click', () => { configsCamera.zoom = Math.max(0.2, configsCamera.zoom - 0.5); atualizarCamera(); });
+  document.getElementById('camRotLeft').addEventListener('click', () => { configsCamera.angulo -= Math.PI / 2; atualizarCamera(); });
+  document.getElementById('camRotRight').addEventListener('click', () => { configsCamera.angulo += Math.PI / 2; atualizarCamera(); });
 
-  // Rotação (90 graus)
-  document.getElementById('camRotLeft').addEventListener('click', () => {
-    configsCamera.angulo -= Math.PI / 2;
-    atualizarCamera();
-    showAviso('Câmera rotacionada para Esquerda.');
-  });
-  document.getElementById('camRotRight').addEventListener('click', () => {
-    configsCamera.angulo += Math.PI / 2;
-    atualizarCamera();
-    showAviso('Câmera rotacionada para Direita.');
-  });
-
-  // Andares
-  document.getElementById('camUp').addEventListener('click', () => {
-    configsCamera.nivel += 1;
-    atualizarCamera();
-    showAviso(`Subiu para o andar ${configsCamera.nivel}.`);
-  });
-  document.getElementById('camDown').addEventListener('click', () => {
-    configsCamera.nivel = Math.max(0, configsCamera.nivel - 1);
-    atualizarCamera();
-    showAviso(configsCamera.nivel === 0 ? `Desceu para o Térreo.` : `Desceu para o andar ${configsCamera.nivel}.`);
-  });
-
-  // Modo de Visão das Paredes
+  // Visão das Paredes
   const btnWallFull = document.getElementById('camWallFull');
   const btnWallCut = document.getElementById('camWallCut');
   const btnWallLow = document.getElementById('camWallLow');
-
   function clearWallActive() { [btnWallFull, btnWallCut, btnWallLow].forEach(b => b.classList.remove('ativo')); }
-
   btnWallFull.addEventListener('click', () => { clearWallActive(); btnWallFull.classList.add('ativo'); mudarVisaoParedes('full'); });
   btnWallCut.addEventListener('click', () => { clearWallActive(); btnWallCut.classList.add('ativo'); mudarVisaoParedes('cut'); });
   btnWallLow.addEventListener('click', () => { clearWallActive(); btnWallLow.classList.add('ativo'); mudarVisaoParedes('low'); });
