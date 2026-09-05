@@ -155,7 +155,7 @@ input[type=text]:focus, input[type=number]:focus { border-color: #38bdf8; }
 .campoSims { display: flex; align-items: center; justify-content: space-between; width: 110px; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; }
 .campoSims input { width: 50px; text-align: center; margin: 0; padding: 4px; }
 
-/* Paleta do HUD */
+/* Paleta do HUD - CORRIGIDA */
 #paletaSecao { display: flex; align-items: flex-start; gap: 12px; margin-top: 8px;}
 #paletaBotoes { display: grid; grid-template-columns: repeat(2, 38px); grid-template-rows: repeat(2, 38px); gap: 6px; }
 #paletaBotoes button { width: 100%; height: 100%; margin: 0; padding: 0; font-size: 16px; border-radius: 8px; }
@@ -163,12 +163,20 @@ input[type=color] { width: 38px; height: 38px; padding: 0; border: none; border-
 input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
 input[type=color]::-webkit-color-swatch { border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; }
 
-#paletaTexturasWrap { display: flex; align-items: center; }
+#paletaTexturasWrap { display: flex; align-items: center; width: 180px; }
 #paletaTexturas { 
-    display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 38px; gap: 6px; 
-    max-height: 85px; overflow-y: auto; padding-right: 4px;
+    display: grid; 
+    grid-template-columns: repeat(4, 1fr); 
+    gap: 6px; 
+    width: 100%;
+    max-height: 85px; 
+    overflow-y: auto; 
+    padding-right: 4px;
 }
 .swatchTextura { 
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    min-height: 34px;
     border: 2px solid transparent; border-radius: 8px; cursor: pointer; 
     background-size: cover; background-position: center; transition: 0.2s;
 }
@@ -229,5 +237,4 @@ input[type=color]::-webkit-color-swatch { border: 1px solid rgba(255,255,255,0.2
     border-color: #38bdf8; background: rgba(56, 189, 248, 0.2); 
     box-shadow: 0 0 10px rgba(56, 189, 248, 0.3); transform: translateY(-2px);
 }
-
 .cam-row.walls .cam-btn { font-size: 18px; width: 44px; height: 40px; }
