@@ -89,7 +89,7 @@ canvas.addEventListener('pointerdown', e => {
       pontoA = { x: px, z: pz };
       marcadorPontoA = criarMarcador(px, pz);
     } else {
-      criarSegmentoParede(pontoA.x, pontoA.z, px, pz, obterAltura());
+      criarSegmentoParede(pontoA.x, pontoA.z, px, pz, obterAltura(), 0.25); // Parede avulsa recebe sobra de 0.25
       removerMarcador();
       previaMesh.visible = false;
     }
@@ -135,26 +135,26 @@ function removerMarcador() {
   pontoA = null;
 }
 
-function criarSegmentoParede(ax, az, bx, bz, altura) {
+// Nova função com ajuste parametrizável
+function criarSegmentoParede(ax, az, bx, bz, altura, ajusteQuina = 0.25) {
   const dx = bx - ax, dz = bz - az;
   const comp = Math.sqrt(dx*dx + dz*dz);
   if (comp < 0.05) return;
 
   const espessura = 0.25;
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(espessura, altura, comp + espessura), materialParede.clone());
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(espessura, altura, comp + ajusteQuina), materialParede.clone());
   mesh.position.set((ax+bx)/2, altura/2, (az+bz)/2);
   mesh.rotation.y = Math.atan2(dx, dz);
   scene.add(mesh);
   
   paredesConstruidas.push({ mesh, ax, az, bx, bz, altura });
-  showAviso('Parede construída!');
 }
 
-function criarPoligonoDeParedes(vertices, altura) {
+function criarPoligonoDeParedes(vertices, altura, ajusteQuina = 0.25) {
   for (let i = 0; i < vertices.length; i++) {
     const p1 = vertices[i];
     const p2 = vertices[(i + 1) % vertices.length];
-    criarSegmentoParede(p1.x, p1.z, p2.x, p2.z, altura);
+    criarSegmentoParede(p1.x, p1.z, p2.x, p2.z, altura, ajusteQuina);
   }
 }
 
@@ -167,7 +167,7 @@ function criarRetangulo(x1, z1, x2, z2, altura) {
     { x: maxX, z: maxZ },
     { x: minX, z: maxZ }
   ];
-  criarPoligonoDeParedes(vertices, altura);
+  criarPoligonoDeParedes(vertices, altura, 0.25);
   showAviso('Sala Retangular construída!');
 }
 
@@ -175,11 +175,12 @@ function criarTriangulo(x1, z1, x2, z2, altura) {
   const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
   const minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
   const vertices = [
-    { x: (minX + maxX) / 2, z: minZ }, // Topo ao centro
-    { x: maxX, z: maxZ },               // Canto inferior direito
-    { x: minX, z: maxZ }                // Canto inferior esquerdo
+    { x: (minX + maxX) / 2, z: minZ },
+    { x: maxX, z: maxZ },
+    { x: minX, z: maxZ }
   ];
-  criarPoligonoDeParedes(vertices, altura);
+  // Triângulos usam 0.10 para as quinas não vazarem
+  criarPoligonoDeParedes(vertices, altura, 0.10);
   showAviso('Sala Triangular construída!');
 }
 
@@ -188,7 +189,6 @@ function criarOctogono(x1, z1, x2, z2, altura) {
   const minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
   const w = maxX - minX, d = maxZ - minZ;
   
-  // Proporção de corte para as quinas do octógono (30% do tamanho)
   const offX = w * 0.3;
   const offZ = d * 0.3;
 
@@ -202,6 +202,7 @@ function criarOctogono(x1, z1, x2, z2, altura) {
     { x: minX, z: maxZ - offZ },
     { x: minX, z: minZ + offZ }
   ];
-  criarPoligonoDeParedes(vertices, altura);
+  // Octógonos usam 0.10 para as quinas não vazarem
+  criarPoligonoDeParedes(vertices, altura, 0.10);
   showAviso('Sala Octogonal construída!');
 }
