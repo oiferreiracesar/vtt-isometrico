@@ -17,7 +17,6 @@ export function showAviso(msg) {
 }
 
 export function iniciarUI() {
-  // Troca de Abas do Nódulo (Bolha)
   document.querySelectorAll('.node-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active'));
@@ -29,24 +28,36 @@ export function iniciarUI() {
     });
   });
 
-  // Limpar Modos
   function desativarFerramentas() {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('ativo'));
   }
 
-  // Ferramentas de Construção
   document.getElementById('btnModoParede').addEventListener('click', (e) => {
     desativarFerramentas();
     e.currentTarget.classList.add('ativo');
     setModoAtivo('parede');
-    showAviso('Modo Parede: Clique no ponto inicial e depois no ponto final.');
+    showAviso('Modo Parede: Clique no ponto inicial e final.');
   });
 
   document.getElementById('btnModoRetangulo').addEventListener('click', (e) => {
     desativarFerramentas();
     e.currentTarget.classList.add('ativo');
     setModoAtivo('retangulo');
-    showAviso('Modo Retângulo: Clique num canto e depois no canto oposto.');
+    showAviso('Modo Retângulo: Clique em um canto e no canto oposto.');
+  });
+
+  document.getElementById('btnModoTriangulo').addEventListener('click', (e) => {
+    desativarFerramentas();
+    e.currentTarget.classList.add('ativo');
+    setModoAtivo('triangulo');
+    showAviso('Modo Triângulo: Defina a área delimitadora da sala.');
+  });
+
+  document.getElementById('btnModoOctogono').addEventListener('click', (e) => {
+    desativarFerramentas();
+    e.currentTarget.classList.add('ativo');
+    setModoAtivo('octogono');
+    showAviso('Modo Octógono: Defina a área delimitadora da sala.');
   });
 
   document.getElementById('btnSairModo').addEventListener('click', (e) => {
