@@ -4,7 +4,7 @@ import { configMapa, meshChaoBase } from './mapa.js';
 import { showAviso, itemSelecionadoAtual } from './ui.js';
 
 export let modoAtivo = null;
-export let modoVisaoAtual = 'full'; // Guarda a escolha do usuário (Cortada, Erguida, Baixa)
+export let modoVisaoAtual = 'full';
 
 export const paredesConstruidas = [];
 export const pilaresConstruidos = []; 
@@ -46,8 +46,6 @@ function snapGrid(valor) { return Math.round(valor / configMapa.tamanhoGrid) * c
 function snapCentroCelula(valor) { return Math.floor(valor / configMapa.tamanhoGrid) * configMapa.tamanhoGrid + configMapa.tamanhoGrid / 2; }
 function obterAltura() { return parseFloat(document.getElementById('inputAlturaParede').value) || 3; }
 
-// --- O SEGREDO DO 3D: Raycast em Plano Matemático ---
-// Em vez de clicar no chão, o mouse clica numa laje invisível na altura exata do andar atual!
 function raycastPlanoBase(clientX, clientY) {
   mouseNdc.x = (clientX / window.innerWidth) * 2 - 1;
   mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -68,14 +66,17 @@ function raycastObjetosDoNivel(clientX, clientY) {
   mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouseNdc, camera);
   
-  // Apenas interage com paredes e objetos do ANDAR ATUAL!
   const paredesF = paredesConstruidas.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh);
   const pilaresF = pilaresConstruidos.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh);
   const pisosF = pisosConstruidos.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh);
   const colunasF = colunasSustentacao.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh);
-  const escadasF = []; // Grupos de escada são mais chatos de clicar, deletamos pelo piso base
   
-  const objetosNivel = [...paredesF, ...pilaresF, ...pisosF, ...colunasF];
+  const escadasF = []; 
+  escadasConstruidas.forEach(e => {
+      if (e.nivel === configsCamera.nivel) escadasF.push(...e.mesh.children);
+  });
+  
+  const objetosNivel = [...paredesF, ...pilaresF, ...pisosF, ...colunasF, ...escadasF];
   if (configsCamera.nivel === 0) objetosNivel.push(meshChaoBase);
 
   const hits = raycaster.intersectObjects(objetosNivel, true);
@@ -101,13 +102,12 @@ function executarMarreta(hitObject) {
   const colIdx = colunasSustentacao.findIndex(p => p.mesh === hitObject);
   if (colIdx > -1) { scene.remove(colunasSustentacao[colIdx].mesh); colunasSustentacao.splice(colIdx, 1); }
   
-  // Deletar escadas (o hit ocorre em um dos "degraus" que é filho do Group)
   const escadaIdx = escadasConstruidas.findIndex(e => e.mesh === hitObject.parent);
   if (escadaIdx > -1) { scene.remove(escadasConstruidas[escadaIdx].mesh); escadasConstruidas.splice(escadaIdx, 1); }
 }
 
 // ----------------------------------------------------
-// INTERAÇÕES DE MOUSE
+// INTERAÇÕES DE MOUSE E PINTURA DE NOVOS OBJETOS
 // ----------------------------------------------------
 canvas.addEventListener('pointerdown', e => {
   if (e.button !== 0 || !modoAtivo) return;
@@ -125,7 +125,6 @@ canvas.addEventListener('pointerdown', e => {
     return;
   }
 
-  // Coluna de Sustentação é Clique Único
   if (modoAtivo === 'coluna') {
      const hit = raycastPlanoBase(e.clientX, e.clientY);
      if (hit) {
@@ -152,6 +151,17 @@ canvas.addEventListener('pointerdown', e => {
   if (modoAtivo === 'pintura') {
     const item = itemSelecionadoAtual();
     if (!item) return;
+
+    // NOVO: PINTAR ESCADAS INTEIRAS
+    const isEscada = escadasConstruidas.some(e => e.mesh === hitAll.object.parent);
+    if (isEscada) {
+        const escada = escadasConstruidas.find(e => e.mesh === hitAll.object.parent);
+        escada.mesh.children.forEach(step => {
+            step.material = gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid);
+        });
+        showAviso("🪜 Escada texturizada!");
+        return;
+    }
 
     const isParede = paredesConstruidas.some(p => p.mesh === hitAll.object);
     const isPilar = pilaresConstruidos.some(p => p.mesh === hitAll.object);
@@ -278,12 +288,12 @@ function limparPilaresSoltos() {
     }
 }
 
-// 🏛️ COLUNAS DE SUSTENTAÇÃO
+// 🏛️ COLUNAS AGORA SÃO TEXTURIZÁVEIS 
 function criarColunaSustentacao(x, z, altura) {
     const alturaBase = configsCamera.nivel * altura;
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, altura, 0.4), materialParede.clone());
+    const materiais = [materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone()];
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, altura, 0.4), materiais);
     mesh.position.set(x, alturaBase + altura / 2, z);
-    mesh.castShadow = true; mesh.receiveShadow = true;
     scene.add(mesh);
     colunasSustentacao.push({ mesh, x, z, nivel: configsCamera.nivel, altura });
 }
@@ -292,19 +302,17 @@ function criarColunaSustentacao(x, z, altura) {
 function criarEscada(ax, az, bx, bz, alturaAndar) {
     const dx = bx - ax, dz = bz - az;
     const comp = Math.hypot(dx, dz);
-    if (comp < 0.5) return; // Muito curta
+    if (comp < 0.5) return; 
 
     const degraus = Math.max(3, Math.floor(comp / (configMapa.tamanhoGrid / 2)));
     const escadaMesh = new THREE.Group();
     const angle = Math.atan2(dx, dz);
-    const mat = materialPiso.clone();
-
+    
     for (let i = 0; i < degraus; i++) {
         const stepD = comp / degraus;
         const stepH = alturaAndar / degraus;
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, stepH * (i + 1), stepD), mat);
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, stepH * (i + 1), stepD), materialPiso.clone());
         mesh.position.set(0, (stepH * (i + 1)) / 2, (i * stepD) - comp/2 + stepD/2);
-        mesh.castShadow = true; mesh.receiveShadow = true;
         escadaMesh.add(mesh);
     }
     
@@ -321,10 +329,8 @@ function obterOuCriarPilar(x, z, altura, isCerca) {
         const mat = isCerca ? materialCerca : materialParede;
         const materiais = [mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone()];
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, 0.25), materiais);
-        
         const alturaBase = configsCamera.nivel * obterAltura();
         mesh.position.set(x, alturaBase + altura / 2, z);
-        mesh.castShadow = true; mesh.receiveShadow = true; 
         scene.add(mesh);
         pilar = { mesh, x, z, altura, nivel: configsCamera.nivel };
         pilaresConstruidos.push(pilar);
@@ -354,7 +360,6 @@ function criarSegmentoParede(ax, az, bx, bz, altura, isCerca) {
   const alturaBase = configsCamera.nivel * obterAltura();
   mesh.position.set((ax+bx)/2, alturaBase + altura/2, (az+bz)/2);
   mesh.rotation.y = Math.atan2(dx, dz);
-  mesh.castShadow = true; mesh.receiveShadow = true; 
   scene.add(mesh);
   
   paredesConstruidas.push({ mesh, ax, az, bx, bz, altura, nivel: configsCamera.nivel, isPorta: false, isCerca, pilarA, pilarB });
@@ -409,7 +414,6 @@ function aplicarPiso(x, z, item) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, 0.12, configMapa.tamanhoGrid), materialPiso.clone());
     const alturaBase = configsCamera.nivel * obterAltura();
     mesh.position.set(x, alturaBase + 0.06, z);
-    mesh.receiveShadow = true; 
     scene.add(mesh);
     tile = { mesh, x, z, nivel: configsCamera.nivel }; pisosConstruidos.push(tile);
   }
@@ -444,47 +448,74 @@ function encontrarAreaFechada(xInicial, zInicial) {
 }
 
 // ----------------------------------------------------
-// GERENCIADOR DE VISIBILIDADE (Simulador 3D Completo)
+// GERENCIADOR DE VISIBILIDADE (E O FANTASMA DA LAJE)
 // ----------------------------------------------------
-export function atualizarVisibilidadeAndares(modoVisãoManual) {
-  if (modoVisãoManual) modoVisaoAtual = modoVisãoManual;
+function setOpacity(mesh, isTransparent, opacity) {
+    if (!mesh) return;
+    if (mesh.type === 'Group') {
+        mesh.children.forEach(child => setOpacity(child, isTransparent, opacity));
+    } else if (Array.isArray(mesh.material)) {
+        mesh.material.forEach(m => { m.transparent = isTransparent; m.opacity = opacity; });
+    } else if (mesh.material) {
+        mesh.material.transparent = isTransparent;
+        mesh.material.opacity = opacity;
+    }
+}
+
+export function atualizarVisibilidadeAndares(modoVisaoManual) {
+  if (modoVisaoManual) modoVisaoAtual = modoVisãoManual;
+
+  // Lógica: Mostrar a planta do andar de cima se estiver na ferramenta Coluna
+  const mostrarFantasma = (modoAtivo === 'coluna'); 
 
   const aplicarParede = (obj) => {
      if (obj.nivel > configsCamera.nivel) {
-         // Esconde andares de cima
-         obj.mesh.visible = false; 
+         if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) {
+             obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); // Fantasma Transparente!
+         } else {
+             obj.mesh.visible = false; 
+         }
      } else if (obj.nivel < configsCamera.nivel) {
-         // Mantém andares de baixo sempre erguidos para dar suporte
-         obj.mesh.visible = true;
-         obj.mesh.scale.y = 1; 
+         obj.mesh.visible = true; obj.mesh.scale.y = 1; 
          obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2);
-         if(Array.isArray(obj.mesh.material)) obj.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; });
+         setOpacity(obj.mesh, false, 1);
      } else {
-         // O Andar atual obedece aos botões de corte (Cheia, Corte, Baixa)
          obj.mesh.visible = true;
          if (modoVisaoAtual === 'full') { 
              obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); 
-             if(Array.isArray(obj.mesh.material)) obj.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; }); 
-         } 
-         else if (modoVisaoAtual === 'cut') { 
+             setOpacity(obj.mesh, false, 1); 
+         } else if (modoVisaoAtual === 'cut') { 
              obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); 
-             if(Array.isArray(obj.mesh.material)) obj.mesh.material.forEach(m => { m.transparent = true; m.opacity = 0.3; }); 
-         } 
-         else if (modoVisaoAtual === 'low') { 
+             setOpacity(obj.mesh, true, 0.3); 
+         } else if (modoVisaoAtual === 'low') { 
              obj.mesh.scale.y = 0.1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura * 0.1) / 2; 
-             if(Array.isArray(obj.mesh.material)) obj.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; }); 
+             setOpacity(obj.mesh, false, 1); 
          }
      }
   };
 
   paredesConstruidas.forEach(aplicarParede); 
   pilaresConstruidos.forEach(aplicarParede);
-  colunasSustentacao.forEach(aplicarParede);
+  
+  colunasSustentacao.forEach(obj => {
+     if (obj.nivel > configsCamera.nivel) {
+         obj.mesh.visible = false; 
+     } else {
+         obj.mesh.visible = true; setOpacity(obj.mesh, false, 1);
+     }
+  });
 
-  // Pisos e Escadas só somem se estiverem em um andar superior
   [pisosConstruidos, escadasConstruidas].forEach(arr => {
       arr.forEach(obj => {
-          obj.mesh.visible = obj.nivel <= configsCamera.nivel;
+          if (obj.nivel > configsCamera.nivel) {
+              if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) {
+                  obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); // Fantasma da Laje!
+              } else {
+                  obj.mesh.visible = false;
+              }
+          } else {
+              obj.mesh.visible = true; setOpacity(obj.mesh, false, 1);
+          }
       });
   });
 }
