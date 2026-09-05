@@ -18,10 +18,10 @@
 
   <!-- POPUP FLUTUANTE DE CÔMODO (GIZMO THE SIMS 4) -->
   <div id="room-gizmo" style="display: none; position: absolute; padding: 6px; background: rgba(15, 23, 32, 0.9); backdrop-filter: blur(8px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 12px; gap: 6px; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-    <button class="tool-btn" id="gizmoMove" title="Mover Cômodo" style="width: 36px; height: 36px; font-size: 16px;">✥</button>
-    <button class="tool-btn" id="gizmoRotLeft" title="Girar Esquerda" style="width: 36px; height: 36px; font-size: 16px;">↶</button>
-    <button class="tool-btn" id="gizmoRotRight" title="Girar Direita" style="width: 36px; height: 36px; font-size: 16px;">↷</button>
-    <button class="tool-btn" id="gizmoDelete" title="Deletar Cômodo" style="width: 36px; height: 36px; font-size: 16px; background: rgba(255,50,50,0.2); border-color: #ff4444;">🗑️</button>
+    <button class="tool-btn" id="gizmoMove" title="Mover Cômodo" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">✥</button>
+    <button class="tool-btn" id="gizmoRotLeft" title="Girar Esquerda" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">↶</button>
+    <button class="tool-btn" id="gizmoRotRight" title="Girar Direita" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">↷</button>
+    <button class="tool-btn" id="gizmoDelete" title="Deletar Cômodo" style="width: 36px; height: 36px; font-size: 16px; margin: 0; background: rgba(255,50,50,0.2); border-color: #ff4444;">🗑️</button>
   </div>
 
   <!-- HUD Câmera The Sims -->
@@ -57,7 +57,6 @@
       <div id="panel-construcao" class="sub-panel active">
         
         <div class="tool-group">
-          <!-- BOTÕES DE HISTÓRICO -->
           <button class="tool-btn" id="btnDesfazer" title="Desfazer (Ctrl+Z)" style="background: rgba(255,255,255,0.1);">↩️</button>
           <button class="tool-btn" id="btnRefazer" title="Refazer (Ctrl+Shift+Z)" style="background: rgba(255,255,255,0.1);">↪️</button>
           <div class="divider"></div>
@@ -69,7 +68,7 @@
           <button class="tool-btn" id="btnModoOctogono" title="Sala Octogonal (Arraste)">🛑</button>
           <button class="tool-btn" id="btnModoPorta" title="Portas/Janelas (Gruda na Parede)">🚪</button>
           <button class="tool-btn" id="btnModoPintura" title="Pintura (Ctrl = Borracha, Shift = Cômodo Inteiro)">🎨</button>
-          <button class="tool-btn ativo" id="btnSairModo" title="Navegar / Selecionar Cômodo">🖐️</button>
+          <button class="tool-btn ativo" id="btnSairModo" title="Navegar / Selecionar">🖐️</button>
         </div>
         
         <div class="tool-group" style="margin-top: 8px;">
