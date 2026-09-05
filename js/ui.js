@@ -1,5 +1,5 @@
 // js/ui.js - Gerenciamento da Interface HTML
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteComodo, girarComodoSelecionado, deletarComodoSelecionado } from './construtor.js';
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarLarguraEscada } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
 
@@ -20,7 +20,7 @@ export function mostrarGizmo(x, y) {
     const g = document.getElementById('room-gizmo');
     if(g) {
         g.style.display = 'flex';
-        g.style.left = (x - 85) + 'px'; 
+        g.style.left = (x - 120) + 'px'; // Ajustado para centralizar com os botões extras
         g.style.top = (y - 70) + 'px'; 
     }
 }
@@ -115,14 +115,18 @@ export function iniciarUI() {
     });
   });
 
-  // BOTÕES DE HISTÓRICO E GIZMO
+  // BOTÕES DE HISTÓRICO E GIZMO (AGORA GENÉRICOS PARA ESCADA E CÔMODO)
   document.getElementById('btnDesfazer')?.addEventListener('click', desfazer);
   document.getElementById('btnRefazer')?.addEventListener('click', refazer);
 
-  document.getElementById('gizmoMove')?.addEventListener('click', iniciarArrasteComodo);
-  document.getElementById('gizmoRotLeft')?.addEventListener('click', () => girarComodoSelecionado('esq'));
-  document.getElementById('gizmoRotRight')?.addEventListener('click', () => girarComodoSelecionado('dir'));
-  document.getElementById('gizmoDelete')?.addEventListener('click', deletarComodoSelecionado);
+  document.getElementById('gizmoMove')?.addEventListener('click', iniciarArrasteSelecionado);
+  document.getElementById('gizmoRotLeft')?.addEventListener('click', () => girarSelecionado('esq'));
+  document.getElementById('gizmoRotRight')?.addEventListener('click', () => girarSelecionado('dir'));
+  document.getElementById('gizmoDelete')?.addEventListener('click', deletarSelecionado);
+  
+  // NOVOS BOTÕES DE LARGURA DE ESCADA
+  document.getElementById('gizmoWiden')?.addEventListener('click', () => alterarLarguraEscada(1));
+  document.getElementById('gizmoShrink')?.addEventListener('click', () => alterarLarguraEscada(-1));
 
   // FERRAMENTAS
   document.getElementById('btnModoParede')?.addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
@@ -135,7 +139,7 @@ export function iniciarUI() {
   
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada: Arraste para o sentido que ela sobe.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala para ver opções.'));
+  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala ou escada para ver opções.'));
 
   const botoesFuturos = ['btnModoTelhado', 'btnModoTerreno'];
   botoesFuturos.forEach(id => { document.getElementById(id)?.addEventListener('click', () => showAviso("Em breve!")); });

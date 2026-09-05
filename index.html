@@ -16,12 +16,20 @@
   <div id="hint">Navegação isométrica: Botão do Meio (arrastar) ou Scroll (zoom)</div>
   <div id="fpsbadge"></div>
 
-  <!-- POPUP FLUTUANTE DE CÔMODO (GIZMO THE SIMS 4) -->
+  <!-- POPUP FLUTUANTE (GIZMO THE SIMS 4) -->
   <div id="room-gizmo" style="display: none; position: absolute; padding: 6px; background: rgba(15, 23, 32, 0.9); backdrop-filter: blur(8px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 12px; gap: 6px; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-    <button class="tool-btn" id="gizmoMove" title="Mover Cômodo" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">✥</button>
+    <button class="tool-btn" id="gizmoMove" title="Mover" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">✥</button>
     <button class="tool-btn" id="gizmoRotLeft" title="Girar Esquerda" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">↶</button>
     <button class="tool-btn" id="gizmoRotRight" title="Girar Direita" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">↷</button>
-    <button class="tool-btn" id="gizmoDelete" title="Deletar Cômodo" style="width: 36px; height: 36px; font-size: 16px; margin: 0; background: rgba(255,50,50,0.2); border-color: #ff4444;">🗑️</button>
+    
+    <div style="width: 1px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
+    
+    <button class="tool-btn" id="gizmoWiden" title="Aumentar Largura (+)" style="width: 36px; height: 36px; font-size: 16px; margin: 0; color: #4ade80;">➕</button>
+    <button class="tool-btn" id="gizmoShrink" title="Diminuir Largura (-)" style="width: 36px; height: 36px; font-size: 16px; margin: 0; color: #facc15;">➖</button>
+    
+    <div style="width: 1px; background: rgba(255,255,255,0.2); margin: 0 4px;"></div>
+
+    <button class="tool-btn" id="gizmoDelete" title="Deletar" style="width: 36px; height: 36px; font-size: 16px; margin: 0; background: rgba(255,50,50,0.2); border-color: #ff4444;">🗑️</button>
   </div>
 
   <!-- HUD Câmera The Sims -->
@@ -114,7 +122,6 @@
         </div>
       </div>
 
-      <!-- Outras abas -->
       <div id="panel-imersao" class="sub-panel"></div>
       <div id="panel-grimorio" class="sub-panel"></div>
     </div>
