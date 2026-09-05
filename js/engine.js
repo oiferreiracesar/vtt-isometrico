@@ -1,10 +1,10 @@
 // js/engine.js - Configuração Core do 3D e Câmera Isométrica
 export const canvas = document.getElementById('canvas3d');
 
-// --- BLOQUEIO DE MENUS NATIVOS DO NAVEGADOR ---
-canvas.addEventListener('contextmenu', e => e.preventDefault());
+// BLINDAGEM ABSOLUTA: Bloqueia o menu do navegador em qualquer situação
+window.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('mousedown', e => {
-    // Impede o navegador de interpretar atalhos nativos com Ctrl e Shift no clique
+    // Impede navegadores (especialmente no Mac) de ativarem atalhos estranhos ao pintar com Ctrl/Shift
     if (e.ctrlKey || e.shiftKey) e.preventDefault();
 });
 
@@ -40,13 +40,10 @@ export function atualizarCamera() {
 }
 atualizarCamera();
 
-// --- ILUMINAÇÃO DE ESTÚDIO ---
 scene.add(new THREE.AmbientLight(0xffffff, 0.8)); 
-
 const luzPrincipal = new THREE.DirectionalLight(0xffffff, 0.8);
 luzPrincipal.position.set(20, 30, 20);
 scene.add(luzPrincipal);
-
 const luzSecundaria = new THREE.DirectionalLight(0xffffff, 0.5);
 luzSecundaria.position.set(-20, 30, -20);
 scene.add(luzSecundaria);
