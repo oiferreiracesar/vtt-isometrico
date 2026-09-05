@@ -72,7 +72,10 @@ export function iniciarUI() {
   function ativarFerramenta(botaoId, modo, msg) {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('ativo'));
     const btn = document.getElementById(botaoId); if(btn) btn.classList.add('ativo');
-    setModoAtivo(modo); if(msg) showAviso(msg);
+    
+    setModoAtivo(modo); 
+    atualizarVisibilidadeAndares(); // FORÇA A ATUALIZAÇÃO DO FANTASMA
+    if(msg) showAviso(msg);
   }
 
   const simsPanel = document.getElementById('sims-panel');
@@ -96,10 +99,8 @@ export function iniciarUI() {
   document.getElementById('btnModoPorta').addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
   document.getElementById('btnModoPintura').addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo)'));
   
-  // NOVAS FERRAMENTAS
   document.getElementById('btnModoEscada').addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada: Arraste para o sentido que ela sobe.'));
-  document.getElementById('btnModoColuna').addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Clique no chão para sustentar varandas.'));
-  
+  document.getElementById('btnModoColuna').addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
   document.getElementById('btnSairModo').addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Modo de Navegação livre.'));
 
   const botoesFuturos = ['btnModoTelhado', 'btnModoTerreno'];
@@ -110,21 +111,13 @@ export function iniciarUI() {
     redimensionarMapa(w, d); showAviso(`Tabuleiro redimensionado para ${w}x${d}.`);
   });
 
-  // SISTEMA DE CÂMERA E ANDARES
   document.getElementById('camZoomIn').addEventListener('click', () => { configsCamera.zoom = Math.min(8, configsCamera.zoom + 0.5); atualizarCamera(); });
   document.getElementById('camZoomOut').addEventListener('click', () => { configsCamera.zoom = Math.max(0.2, configsCamera.zoom - 0.5); atualizarCamera(); });
   document.getElementById('camRotLeft').addEventListener('click', () => { configsCamera.angulo -= Math.PI / 2; atualizarCamera(); });
   document.getElementById('camRotRight').addEventListener('click', () => { configsCamera.angulo += Math.PI / 2; atualizarCamera(); });
   
-  // Subir / Descer Andares
-  document.getElementById('camUp').addEventListener('click', () => { 
-      configsCamera.nivel += 1; atualizarCamera(); atualizarVisibilidadeAndares();
-      showAviso(`Subiu para o Nível ${configsCamera.nivel}.`);
-  });
-  document.getElementById('camDown').addEventListener('click', () => { 
-      configsCamera.nivel = Math.max(0, configsCamera.nivel - 1); atualizarCamera(); atualizarVisibilidadeAndares();
-      showAviso(configsCamera.nivel === 0 ? `Desceu para o Térreo.` : `Desceu para o Nível ${configsCamera.nivel}.`);
-  });
+  document.getElementById('camUp').addEventListener('click', () => { configsCamera.nivel += 1; atualizarCamera(); atualizarVisibilidadeAndares(); showAviso(`Subiu para o Nível ${configsCamera.nivel}.`); });
+  document.getElementById('camDown').addEventListener('click', () => { configsCamera.nivel = Math.max(0, configsCamera.nivel - 1); atualizarCamera(); atualizarVisibilidadeAndares(); showAviso(configsCamera.nivel === 0 ? `Desceu para o Térreo.` : `Desceu para o Nível ${configsCamera.nivel}.`); });
 
   const btnWallFull = document.getElementById('camWallFull'), btnWallCut = document.getElementById('camWallCut'), btnWallLow = document.getElementById('camWallLow');
   function clearWallActive() { [btnWallFull, btnWallCut, btnWallLow].forEach(b => b.classList.remove('ativo')); }
