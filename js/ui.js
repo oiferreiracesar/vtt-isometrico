@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML (Com Blindagem de Erros)
+// js/ui.js - Gerenciamento da Interface HTML
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteComodo, girarComodoSelecionado, deletarComodoSelecionado } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -15,7 +15,7 @@ export function showAviso(msg) {
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-// O GIZMO DO THE SIMS
+// O GIZMO DO THE SIMS (POPUP)
 export function mostrarGizmo(x, y) {
     const g = document.getElementById('room-gizmo');
     if(g) {
