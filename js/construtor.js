@@ -1,4 +1,4 @@
-// js/construtor.js - Múltiplos Andares, Gizmo e ESCADAS ESCALÁVEIS
+// js/construtor.js - Múltiplos Andares, Gizmo, Z-Fighting Fix e Pintura Global
 import { scene, camera, canvas, configsCamera } from './engine.js';
 import { configMapa, meshChaoBase } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo } from './ui.js';
@@ -15,7 +15,7 @@ export const colunasSustentacao = [];
 
 let arrastandoConstrucao = false;
 let comodoSelecionado = null; 
-let escadaSelecionada = null; // NOVO: Foco na escada
+let escadaSelecionada = null; 
 let movendoSelecionado = false;
 let pontoA = null; 
 
@@ -58,7 +58,7 @@ export function desfazer() {
     if (historicoUndo.length === 0) { showAviso("Nada para desfazer."); return; }
     const acao = historicoUndo.pop();
     try {
-        acao.move.forEach(m => { const c = comodosConstruidos.find(x => x.id === m.comodoId); if (c) aplicarMovimentoComodo(c, -m.dx, -m.dz); });
+        acao.move.forEach(m => { const c = comodosConstruidos.find(x => x.id === m.comodoId); if (c) aplicarMovimento(c, -m.dx, -m.dz); });
         acao.paint.forEach(p => { if(p.obj && p.oldMats) p.obj.material = p.oldMats; });
         acao.add.forEach(item => {
             scene.remove(item.obj.mesh);
@@ -90,7 +90,7 @@ export function refazer() {
     if (historicoRedo.length === 0) { showAviso("Nada para refazer."); return; }
     const acao = historicoRedo.pop();
     try {
-        acao.move.forEach(m => { const c = comodosConstruidos.find(x => x.id === m.comodoId); if (c) aplicarMovimentoComodo(c, m.dx, m.dz); });
+        acao.move.forEach(m => { const c = comodosConstruidos.find(x => x.id === m.comodoId); if (c) aplicarMovimento(c, m.dx, m.dz); });
         acao.paint.forEach(p => { if(p.obj && p.newMats) p.obj.material = p.newMats; });
         acao.add.forEach(item => {
             scene.add(item.obj.mesh);
@@ -278,7 +278,7 @@ export function girarSelecionado(sentido) {
 export function alterarLarguraEscada(direcao) {
     if (!escadaSelecionada) return;
     const newLargura = Math.max(configMapa.tamanhoGrid, escadaSelecionada.largura + (direcao * configMapa.tamanhoGrid));
-    if (newLargura === escadaSelecionada.largura) return; // Limite mínimo
+    if (newLargura === escadaSelecionada.largura) return; 
     
     iniciarAcao();
     reconstruirDegrausEscada(escadaSelecionada, newLargura);
@@ -327,23 +327,20 @@ canvas?.addEventListener('pointerdown', e => {
       return;
   }
 
-  // O CLIQUE INTELIGENTE DO MODO NAVEGAR
+  // O CLIQUE INTELIGENTE DO MODO NAVEGAR E SELEÇÃO
   if (!modoAtivo && e.button === 0 && !e.altKey && !e.ctrlKey && !e.shiftKey) {
-      
       if (grupoSetas.visible) {
           raycaster.setFromCamera(mouseNdc, camera);
           const hitsSetas = raycaster.intersectObjects(grupoSetas.children);
           if (hitsSetas.length > 0) {
               arrastandoSeta = hitsSetas[0].object.userData.dir;
               esconderGizmo();
-              
               let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
               comodoSelecionado.paredes.forEach(p => {
                   minX = Math.min(minX, p.ax, p.bx); maxX = Math.max(maxX, p.ax, p.bx);
                   minZ = Math.min(minZ, p.az, p.bz); maxZ = Math.max(maxZ, p.az, p.bz);
               });
               comodoArrastadoBounds = { minX, maxX, minZ, maxZ };
-              
               comodoSelecionado.paredesIniciais = comodoSelecionado.paredes.map(p => ({ parede: p, ax: p.ax, az: p.az, bx: p.bx, bz: p.bz }));
               comodoSelecionado.pilaresIniciais = comodoSelecionado.pilares.map(p => ({ pilar: p, x: p.x, z: p.z }));
               return;
@@ -352,8 +349,6 @@ canvas?.addEventListener('pointerdown', e => {
 
       const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
       if (hitAll && hitAll.object !== meshChaoBase) {
-          
-          // Checa se é uma ESCADA primeiro
           const isEscada = escadasConstruidas.find(esc => esc.mesh === hitAll.object.parent);
           if (isEscada) {
               limparSelecao();
@@ -362,8 +357,6 @@ canvas?.addEventListener('pointerdown', e => {
               mostrarGizmo(e.clientX, e.clientY);
               return;
           }
-
-          // Se não, checa Cômodo
           const objClicado = paredesConstruidas.find(p => p.mesh === hitAll.object) || pilaresConstruidos.find(p => p.mesh === hitAll.object);
           if (objClicado && objClicado.comodoId) {
               limparSelecao();
@@ -401,7 +394,7 @@ canvas?.addEventListener('pointerdown', e => {
      return;
   }
 
-  // --- LÓGICA CIRÚRGICA DE PINTURA ---
+  // --- NOVA LÓGICA DE PINTURA (Pilar Inteiro) ---
   if (modoAtivo === 'pintura') {
       const isRemocao = e.ctrlKey; 
       const item = itemSelecionadoAtual();
@@ -422,7 +415,7 @@ canvas?.addEventListener('pointerdown', e => {
               step.material = isRemocao ? materialPiso.clone() : gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid); 
               finalizarPintura(step);
           });
-          escada.textura = isRemocao ? null : item; // Salva a textura para quando reconstruir
+          escada.textura = isRemocao ? null : item; 
           return;
       }
 
@@ -465,11 +458,36 @@ canvas?.addEventListener('pointerdown', e => {
           } else { celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); }
       } else {
           if (targetObject && (isParede || isPilar || isColuna)) {
-              const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
-              const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
-              const worldNormal = localNormals[faceClicada].clone().applyQuaternion(targetObject.quaternion).normalize();
-              if (isRemocao) { removerPinturaFacePorNormal(targetObject, worldNormal, materialParede); } 
-              else { pintarFacePorNormalMundial(targetObject, worldNormal, item); }
+              const paredeObj = paredesConstruidas.find(p => p.mesh === targetObject);
+              const pilarObj = pilaresConstruidos.find(p => p.mesh === targetObject);
+              const colunaObj = colunasSustentacao.find(p => p.mesh === targetObject);
+
+              // 🎨 SE FOR PILAR, COLUNA OU CERCA = PINTA O OBJETO INTEIRO (OS 6 LADOS)
+              if (colunaObj || pilarObj || (paredeObj && paredeObj.isCerca)) {
+                  const baseMat = (paredeObj && paredeObj.isCerca) || (pilarObj && pilarObj.isCerca) ? materialCerca : materialParede;
+                  for (let i = 0; i < 6; i++) {
+                      if (isRemocao) removerMaterialNaFace(targetObject, i, baseMat);
+                      else aplicarMaterialNaFace(targetObject, i, item);
+                  }
+              } else {
+                  // PAREDE NORMAL: PINTA SÓ UM LADO
+                  const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
+                  const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
+                  const worldNormal = localNormals[faceClicada].clone().applyQuaternion(targetObject.quaternion).normalize();
+                  if (isRemocao) {
+                      removerPinturaFacePorNormal(targetObject, worldNormal, materialParede);
+                      if (paredeObj && !paredeObj.isPorta) {
+                          if (paredeObj.pilarA) removerPinturaFacePorNormal(paredeObj.pilarA.mesh, worldNormal, materialParede);
+                          if (paredeObj.pilarB) removerPinturaFacePorNormal(paredeObj.pilarB.mesh, worldNormal, materialParede);
+                      }
+                  } else {
+                      pintarFacePorNormalMundial(targetObject, worldNormal, item);
+                      if (paredeObj && !paredeObj.isPorta) {
+                          if (paredeObj.pilarA) pintarFacePorNormalMundial(paredeObj.pilarA.mesh, worldNormal, item);
+                          if (paredeObj.pilarB) pintarFacePorNormalMundial(paredeObj.pilarB.mesh, worldNormal, item);
+                      }
+                  }
+              }
           } else { 
               const cx = snapCentroCelula(clickPoint.x); const cz = snapCentroCelula(clickPoint.z);
               if (isRemocao) removerPiso(cx, cz); else aplicarPiso(cx, cz, item); 
@@ -540,6 +558,11 @@ canvas?.addEventListener('pointermove', e => {
               escadaSelecionada.ax += dx; escadaSelecionada.az += dz;
               escadaSelecionada.bx += dx; escadaSelecionada.bz += dz;
               escadaSelecionada.mesh.position.x += dx; escadaSelecionada.mesh.position.z += dz;
+          }
+          if (acaoAtual) {
+              const moveRecord = acaoAtual.move.find(m => m.comodoId === (comodoSelecionado ? comodoSelecionado.id : escadaSelecionada.id));
+              if (moveRecord) { moveRecord.dx += dx; moveRecord.dz += dz; } 
+              else { acaoAtual.move.push({ comodoId: (comodoSelecionado ? comodoSelecionado.id : escadaSelecionada.id), dx, dz }); }
           }
       }
       return;
@@ -660,20 +683,19 @@ function criarTriangulo(x1, z1, x2, z2, altura, comodoId = null) { const minX = 
 function criarOctogono(x1, z1, x2, z2, altura, comodoId = null) { const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2); const w = maxX - minX, d = maxZ - minZ, offX = w * 0.3, offZ = d * 0.3; criarPoligonoDeParedes([{ x: minX + offX, z: minZ }, { x: maxX - offX, z: minZ }, { x: maxX, z: minZ + offZ }, { x: maxX, z: maxZ - offZ }, { x: maxX - offX, z: maxZ }, { x: minX + offX, z: maxZ }, { x: minX, z: maxZ - offZ }, { x: minX, z: minZ + offZ }], altura, comodoId); }
 function criarColunaSustentacao(x, z, altura) { const alturaBase = configsCamera.nivel * altura; const materiais = [materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone()]; const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, altura, 0.4), materiais); mesh.position.set(x, alturaBase + altura / 2, z); scene.add(mesh); const coluna = { mesh, x, z, nivel: configsCamera.nivel, altura }; colunasSustentacao.push(coluna); registrarAdicao('coluna', coluna, colunasSustentacao); }
 
-// --- MOTOR DE LARGURA DE ESCADAS ---
+// --- MOTOR DE LARGURA DE ESCADAS COM FIX Z-FIGHTING ---
 function criarEscada(ax, az, bx, bz, alturaAndar, largura = configMapa.tamanhoGrid) { 
     const dx = bx - ax, dz = bz - az; const comp = Math.hypot(dx, dz); if (comp < 0.5) return; 
     const escadaMesh = new THREE.Group(); const angle = Math.atan2(dx, dz); 
-    const escada = { mesh: escadaMesh, ax, az, bx, bz, alturaAndar, largura, nivel: configsCamera.nivel, textura: null, isEscada: true }; 
+    const id = Date.now() + Math.random(); // ID Unico
+    const escada = { id, mesh: escadaMesh, ax, az, bx, bz, alturaAndar, largura, nivel: configsCamera.nivel, textura: null, isEscada: true }; 
     reconstruirDegrausEscada(escada, largura);
     escadasConstruidas.push(escada); registrarAdicao('escada', escada, escadasConstruidas); 
 }
 
-function reconstruirDegrausEscada(escada, novaLargura) {
+export function reconstruirDegrausEscada(escada, novaLargura) {
     escada.largura = novaLargura;
-    while(escada.mesh.children.length > 0){ 
-        escada.mesh.remove(escada.mesh.children[0]); 
-    }
+    while(escada.mesh.children.length > 0){ escada.mesh.remove(escada.mesh.children[0]); }
     const dx = escada.bx - escada.ax, dz = escada.bz - escada.az; 
     const comp = Math.hypot(dx, dz); 
     const degraus = Math.max(3, Math.floor(comp / (configMapa.tamanhoGrid / 2))); 
@@ -682,18 +704,43 @@ function reconstruirDegrausEscada(escada, novaLargura) {
     for (let i = 0; i < degraus; i++) { 
         const stepD = comp / degraus, stepH = escada.alturaAndar / degraus; 
         const mat = escada.textura ? gerarMaterialPintura(escada.textura, configMapa.tamanhoGrid, configMapa.tamanhoGrid) : materialPiso.clone();
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(escada.largura, stepH * (i + 1), stepD), mat); 
-        mesh.position.set(0, (stepH * (i + 1)) / 2, (i * stepD) - comp/2 + stepD/2); 
+        
+        // Z-FIGHTING FIX: Subtrai 0.002 na largura e profundidade
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(escada.largura - 0.002, stepH * (i + 1), stepD - 0.002), mat); 
+        
+        // Z-FIGHTING FIX: Adiciona 0.001 no eixo Y para desencostar perfeitamente do chão
+        mesh.position.set(0, (stepH * (i + 1)) / 2 + 0.001, (i * stepD) - comp/2 + stepD/2); 
         escada.mesh.add(mesh); 
     } 
     const alturaBase = escada.nivel * escada.alturaAndar; 
     escada.mesh.position.set((escada.ax+escada.bx)/2, alturaBase, (escada.az+escada.bz)/2); 
     escada.mesh.rotation.y = angle; 
-    scene.add(escada.mesh);
     
-    if (escadaSelecionada === escada) {
-        escada.mesh.children.forEach(c => c.material.emissive.setHex(0x2a2a2a));
-    }
+    if(!scene.children.includes(escada.mesh)) scene.add(escada.mesh);
+    
+    if (escadaSelecionada === escada) { escada.mesh.children.forEach(c => c.material.emissive.setHex(0x2a2a2a)); }
+}
+
+function executarMarreta(hitObject) {
+  if (!hitObject || hitObject === meshChaoBase) return;
+  const isPiso = pisosConstruidos.some(p => p.mesh === hitObject);
+  const isParedeMode = ['parede', 'cerca', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo);
+  if (isParedeMode && isPiso) return; 
+  
+  const parede = paredesConstruidas.find(p => p.mesh === hitObject);
+  if (parede) { removerObjetoMundo('parede', parede, paredesConstruidas); limparPilaresSoltos(); return; }
+  
+  const pilar = pilaresConstruidos.find(p => p.mesh === hitObject);
+  if (pilar) { const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilar || p.pilarB === pilar); attachedWalls.forEach(p => removerObjetoMundo('parede', p, paredesConstruidas)); limparPilaresSoltos(); return; }
+  
+  const piso = pisosConstruidos.find(p => p.mesh === hitObject);
+  if (piso) { removerObjetoMundo('piso', piso, pisosConstruidos); return; }
+  
+  const coluna = colunasSustentacao.find(p => p.mesh === hitObject);
+  if (coluna) { removerObjetoMundo('coluna', coluna, colunasSustentacao); return; }
+  
+  const escada = escadasConstruidas.find(e => e.mesh === hitObject.parent);
+  if (escada) { removerObjetoMundo('escada', escada, escadasConstruidas); return; }
 }
 
 // ----------------------------------------------------
