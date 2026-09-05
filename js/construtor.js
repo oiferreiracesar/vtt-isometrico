@@ -5,7 +5,7 @@ import { showAviso, itemSelecionadoAtual } from './ui.js';
 
 export let modoAtivo = null;
 export const paredesConstruidas = [];
-export const pilaresConstruidos = []; // NOVO: Gerencia as quinas perfeitamente
+export const pilaresConstruidos = []; 
 export const pisosConstruidos = []; 
 
 let arrastandoConstrucao = false;
@@ -150,10 +150,10 @@ canvas.addEventListener('pointerdown', e => {
               }
            });
          });
-         showAviso("🎨 Papel de parede aplicado na sala inteira!");
+         showAviso("🎨 Papel de parede aplicado na área inteira!");
       } else {
          celulas.forEach(c => aplicarPiso(c.x, c.z, item));
-         showAviso("🎨 Piso aplicado na sala inteira!");
+         showAviso("🎨 Piso aplicado na área inteira!");
       }
     } 
     // PINTAR APENAS UM LADO (CLIQUE SIMPLES)
@@ -283,7 +283,6 @@ function obterOuCriarPilar(x, z, altura) {
 }
 
 function criarSegmentoParede(ax, az, bx, bz, altura) {
-  // Evita duplicar paredes no mesmo lugar exato
   const existe = paredesConstruidas.find(p => 
       (Math.abs(p.ax - ax) < 0.01 && Math.abs(p.az - az) < 0.01 && Math.abs(p.bx - bx) < 0.01 && Math.abs(p.bz - bz) < 0.01) ||
       (Math.abs(p.ax - bx) < 0.01 && Math.abs(p.az - bz) < 0.01 && Math.abs(p.bx - ax) < 0.01 && Math.abs(p.bz - az) < 0.01)
@@ -297,7 +296,6 @@ function criarSegmentoParede(ax, az, bx, bz, altura) {
   const pilarA = obterOuCriarPilar(ax, az, altura);
   const pilarB = obterOuCriarPilar(bx, bz, altura);
 
-  // A parede agora encaixa EXATAMENTE entre os pilares, erradicando o Z-Fighting de vez
   const compParede = Math.max(0.001, compTotal - 0.25);
   const materiais = [
     materialParede.clone(), materialParede.clone(), materialParede.clone(), 
@@ -350,9 +348,9 @@ function criarOctogono(x1, z1, x2, z2, altura) {
 }
 
 // ----------------------------------------------------
-// APLICAÇÃO DE PINTURA E PISO
+// LÓGICA MATEMÁTICA DE MAPEAMENTO UV PARA TEXTURAS
 // ----------------------------------------------------
-function gerarMaterialPintura(item) {
+function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) {
   const mat = new THREE.MeshLambertMaterial();
   if (item.tipo === 'cor') {
     mat.color.set(item.cor);
@@ -360,7 +358,7 @@ function gerarMaterialPintura(item) {
     const tex = item.textura.clone();
     tex.needsUpdate = true;
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(1.5, 1.5);
+    tex.repeat.set(repeatX, repeatY);
     mat.map = tex;
     mat.color.set(0xffffff);
   }
@@ -368,8 +366,22 @@ function gerarMaterialPintura(item) {
 }
 
 function aplicarMaterialNaFace(mesh, faceIndex, item) {
+  let repeatX = 1, repeatY = 1;
+  
+  // Escala Dinâmica: A textura se adapta perfeitamente ao tamanho físico do bloco!
+  if (mesh.geometry && mesh.geometry.parameters) {
+      const { width, height, depth } = mesh.geometry.parameters;
+      if (faceIndex === 0 || faceIndex === 1) { // Faces Laterais da Parede (Profundidade x Altura)
+          repeatX = depth; repeatY = height;
+      } else if (faceIndex === 2 || faceIndex === 3) { // Topo e Base (Largura x Profundidade)
+          repeatX = width; repeatY = depth;
+      } else if (faceIndex === 4 || faceIndex === 5) { // Quinas/Pontas da Parede (Largura x Altura)
+          repeatX = width; repeatY = height;
+      }
+  }
+
   const novosMateriais = [...mesh.material]; 
-  novosMateriais[faceIndex] = gerarMaterialPintura(item);
+  novosMateriais[faceIndex] = gerarMaterialPintura(item, repeatX, repeatY);
   mesh.material = novosMateriais;
 }
 
@@ -382,7 +394,6 @@ function pintarFacePorNormalMundial(mesh, targetNormal, item) {
     ];
     for (let i = 0; i < 6; i++) {
         const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize();
-        // Dot product aproxima o ângulo. Se apontar na mesma direção (> 0.5), ele pinta a face.
         if (worldNormal.dot(tNorm) > 0.5) {
             aplicarMaterialNaFace(mesh, i, item);
         }
@@ -398,11 +409,12 @@ function aplicarPiso(x, z, item) {
     tile = { mesh, x, z };
     pisosConstruidos.push(tile);
   }
-  tile.mesh.material = gerarMaterialPintura(item);
+  // Aplica a textura no piso escalando perfeitamente pelo tamanho da grade
+  tile.mesh.material = gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid);
 }
 
 // ----------------------------------------------------
-// ALGORITMO DE FLOOD FILL (ACHAR SALA FECHADA)
+// ALGORITMO DE FLOOD FILL (AGORA EXPANDIDO)
 // ----------------------------------------------------
 function distanciaPontoSegmento(px, pz, ax, az, bx, bz) {
   const compSq = (bx-ax)**2 + (bz-az)**2;
@@ -423,14 +435,16 @@ function encontrarAreaFechada(xInicial, zInicial) {
   const pilha = [{ x: xInicial, z: zInicial }];
   const celulas = [];
   
-  while (pilha.length && celulas.length < 3000) {
+  // AUMENTADO para 50.000 para permitir pintar áreas imensas
+  while (pilha.length && celulas.length < 50000) {
     const atual = pilha.pop();
     const chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`;
     
     if (visitados.has(chave)) continue;
     visitados.add(chave);
     
-    if (Math.abs(atual.x) > 50 || Math.abs(atual.z) > 50) continue; 
+    // Limite de segurança do mapa expandido para 100
+    if (Math.abs(atual.x) > 100 || Math.abs(atual.z) > 100) continue; 
     
     celulas.push(atual);
     
