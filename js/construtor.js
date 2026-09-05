@@ -1,4 +1,4 @@
-// js/construtor.js - Múltiplos Andares, Gizmo, Fog of War e SISTEMA DE SAVE/LOAD
+// js/construtor.js - Múltiplos Andares, Gizmo, Fog of War e SISTEMA DE DECORAÇÃO (Salvar/Carregar)
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
@@ -47,90 +47,136 @@ const historicoRedo = [];
 let acaoAtual = null;
 
 // =========================================================================
-// SISTEMA DE SALVAR, CARREGAR E DEMOLIR MAPA
+// SCANNER E TRADUTOR DE DECORAÇÃO (SAVE/LOAD AVANÇADO)
 // =========================================================================
-export function limparMapa() {
-    [...paredesConstruidas, ...pilaresConstruidos, ...pisosConstruidos, ...colunasSustentacao].forEach(obj => {
-        scene.remove(obj.mesh);
+function extrairMateriais(mesh) {
+    if (!mesh || !mesh.material) return [];
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    return mats.map(m => {
+        if (m.map && m.map.image) return { tipo: 'imagem', dataUrl: m.map.image.src || m.map.image.currentSrc };
+        return { tipo: 'cor', cor: '#' + m.color.getHexString() };
     });
+}
+
+function extrairMaterialEscada(escada) {
+    if (escada.mesh.children.length > 0) {
+        const m = escada.mesh.children[0].material;
+        if (m.map && m.map.image) return { tipo: 'imagem', dataUrl: m.map.image.src || m.map.image.currentSrc };
+        return { tipo: 'cor', cor: '#' + m.color.getHexString() };
+    }
+    return { tipo: 'cor', cor: '#8a7550' };
+}
+
+function aplicarMateriaisImportados(mesh, matDataArray, objectType) {
+    if (!matDataArray || matDataArray.length === 0 || !mesh) return;
+    
+    const materiais = matDataArray.map(data => {
+        if (data.tipo === 'imagem' && data.dataUrl) {
+            const tex = new THREE.TextureLoader().load(data.dataUrl);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            return new THREE.MeshLambertMaterial({ map: tex, color: 0xffffff });
+        } else {
+            return new THREE.MeshLambertMaterial({ color: data.cor || '#ffffff' });
+        }
+    });
+
+    mesh.material = Array.isArray(mesh.material) ? materiais : materiais[0];
+
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    mats.forEach((mat, faceIndex) => {
+        if (mat.map && mesh.geometry && mesh.geometry.parameters) {
+            let repeatX = 1, repeatY = 1;
+            if (objectType === 'piso' || objectType === 'escada') {
+                repeatX = configMapa.tamanhoGrid; repeatY = configMapa.tamanhoGrid;
+            } else {
+                const { width, height, depth } = mesh.geometry.parameters;
+                if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; }
+                else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; }
+                else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; }
+            }
+            mat.map.repeat.set(repeatX, repeatY);
+            mat.needsUpdate = true;
+        }
+    });
+}
+
+export function limparMapa() {
+    [...paredesConstruidas, ...pilaresConstruidos, ...pisosConstruidos, ...colunasSustentacao].forEach(obj => { scene.remove(obj.mesh); });
     escadasConstruidas.forEach(e => scene.remove(e.mesh));
 
-    paredesConstruidas.length = 0;
-    pilaresConstruidos.length = 0;
-    pisosConstruidos.length = 0;
-    colunasSustentacao.length = 0;
-    escadasConstruidas.length = 0;
-    comodosConstruidos.length = 0;
-
-    historicoUndo.length = 0;
-    historicoRedo.length = 0;
+    paredesConstruidas.length = 0; pilaresConstruidos.length = 0; pisosConstruidos.length = 0; colunasSustentacao.length = 0; escadasConstruidas.length = 0; comodosConstruidos.length = 0;
+    historicoUndo.length = 0; historicoRedo.length = 0;
     
-    setModoAtivo(null);
-    atualizarVisibilidadeAndares();
-    showAviso("Tabuleiro completamente limpo!");
+    setModoAtivo(null); atualizarVisibilidadeAndares(); showAviso("Tabuleiro completamente limpo!");
 }
 
 export function exportarMapa() {
-    // Escaneia a matemática do mapa ignorando os pesos visuais do 3D
     const dados = {
-        versao: 1,
-        paredes: paredesConstruidas.map(p => ({ ax: p.ax, az: p.az, bx: p.bx, bz: p.bz, altura: p.altura, isCerca: p.isCerca, comodoId: p.comodoId, nivel: p.nivel, isPorta: p.isPorta })),
-        pisos: pisosConstruidos.map(p => ({ x: p.x, z: p.z, nivel: p.nivel })),
-        escadas: escadasConstruidas.map(e => ({ ax: e.ax, az: e.az, bx: e.bx, bz: e.bz, alturaAndar: e.alturaAndar, largura: e.largura, nivel: e.nivel })),
-        colunas: colunasSustentacao.map(c => ({ x: c.x, z: c.z, altura: c.altura, nivel: c.nivel }))
+        versao: 2, // Versão avançada com decoração
+        pisos: pisosConstruidos.map(p => ({ x: p.x, z: p.z, nivel: p.nivel, materiais: extrairMateriais(p.mesh) })),
+        pilares: pilaresConstruidos.map(p => ({ x: p.x, z: p.z, altura: p.altura, nivel: p.nivel, isCerca: p.isCerca, comodoId: p.comodoId, materiais: extrairMateriais(p.mesh) })),
+        paredes: paredesConstruidas.map(p => ({ ax: p.ax, az: p.az, bx: p.bx, bz: p.bz, altura: p.altura, isCerca: p.isCerca, comodoId: p.comodoId, nivel: p.nivel, isPorta: p.isPorta, materiais: extrairMateriais(p.mesh) })),
+        colunas: colunasSustentacao.map(c => ({ x: c.x, z: c.z, altura: c.altura, nivel: c.nivel, materiais: extrairMateriais(c.mesh) })),
+        escadas: escadasConstruidas.map(e => ({ ax: e.ax, az: e.az, bx: e.bx, bz: e.bz, alturaAndar: e.alturaAndar, largura: e.largura, nivel: e.nivel, material: extrairMaterialEscada(e) }))
     };
     
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dados));
-    const downloadNode = document.createElement('a');
-    downloadNode.setAttribute("href", dataStr);
-    downloadNode.setAttribute("download", "masmorra.json");
-    document.body.appendChild(downloadNode); 
-    downloadNode.click();
-    downloadNode.remove();
+    const downloadNode = document.createElement('a'); downloadNode.setAttribute("href", dataStr); downloadNode.setAttribute("download", "masmorra_decorada.json");
+    document.body.appendChild(downloadNode); downloadNode.click(); downloadNode.remove();
     showAviso("Projeto exportado com sucesso!");
 }
 
 export function importarMapa(dados) {
     limparMapa();
     const nivelOriginal = configsCamera.nivel;
-    const defaultPiso = { tipo: 'cor', cor: '#8a7550' }; // Planta baixa padrão
 
+    // A ORDEM AQUI É VITAL: Pisos, depois Pilares (para segurar as tintas das quinas), Paredes, Colunas e Escadas.
     if(dados.pisos) {
         dados.pisos.forEach(p => {
             configsCamera.nivel = p.nivel;
-            aplicarPiso(p.x, p.z, defaultPiso);
+            aplicarPiso(p.x, p.z, { tipo: 'cor', cor: '#8a7550' }); // Planta base
+            const piso = pisosConstruidos[pisosConstruidos.length - 1];
+            aplicarMateriaisImportados(piso.mesh, p.materiais, 'piso');
+        });
+    }
+    if(dados.pilares) {
+        dados.pilares.forEach(p => {
+            configsCamera.nivel = p.nivel;
+            const pilar = obterOuCriarPilar(p.x, p.z, p.altura, p.isCerca, p.comodoId);
+            aplicarMateriaisImportados(pilar.mesh, p.materiais, 'pilar');
         });
     }
     if(dados.paredes) {
         dados.paredes.forEach(p => {
             configsCamera.nivel = p.nivel;
             criarSegmentoParede(p.ax, p.az, p.bx, p.bz, p.altura, p.isCerca, p.comodoId);
-            if (p.isPorta) {
-                const wall = paredesConstruidas[paredesConstruidas.length - 1];
-                wall.isPorta = true;
-                const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 });
-                wall.mesh.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta];
-            }
-        });
-    }
-    if(dados.escadas) {
-        dados.escadas.forEach(e => {
-            configsCamera.nivel = e.nivel;
-            criarEscada(e.ax, e.az, e.bx, e.bz, e.alturaAndar, e.largura);
+            const parede = paredesConstruidas[paredesConstruidas.length - 1];
+            aplicarMateriaisImportados(parede.mesh, p.materiais, 'parede');
         });
     }
     if(dados.colunas) {
         dados.colunas.forEach(c => {
             configsCamera.nivel = c.nivel;
             criarColunaSustentacao(c.x, c.z, c.altura);
+            const col = colunasSustentacao[colunasSustentacao.length - 1];
+            aplicarMateriaisImportados(col.mesh, c.materiais, 'coluna');
+        });
+    }
+    if(dados.escadas) {
+        dados.escadas.forEach(e => {
+            configsCamera.nivel = e.nivel;
+            criarEscada(e.ax, e.az, e.bx, e.bz, e.alturaAndar, e.largura);
+            const escada = escadasConstruidas[escadasConstruidas.length - 1];
+            if (e.material) {
+                escada.textura = { tipo: e.material.tipo, cor: e.material.cor, dataUrl: e.material.dataUrl };
+                escada.mesh.children.forEach(child => aplicarMateriaisImportados(child, [e.material], 'escada'));
+            }
         });
     }
 
-    configsCamera.nivel = nivelOriginal;
-    historicoUndo.length = 0; // Limpa ações fantasmas que geraram no load
-    acaoAtual = null;
-    atualizarVisibilidadeAndares();
-    showAviso("Projeto carregado com sucesso!");
+    configsCamera.nivel = nivelOriginal; historicoUndo.length = 0; acaoAtual = null;
+    atualizarVisibilidadeAndares(); showAviso("Decorações carregadas com sucesso!");
 }
 // =========================================================================
 
@@ -758,7 +804,22 @@ function executarMarreta(hitObject) {
   if (escada) { removerObjetoMundo('escada', escada, escadasConstruidas); return; }
 }
 
-function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) { const mat = new THREE.MeshLambertMaterial(); if (item.tipo === 'cor') { mat.color.set(item.cor); } else { const tex = item.textura.clone(); tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(repeatX, repeatY); mat.map = tex; mat.color.set(0xffffff); } return mat; }
+// ----------------------------------------------------
+// PINTURA E REMOÇÃO DE PINTURA (BORRACHA)
+// ----------------------------------------------------
+function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) { 
+    const mat = new THREE.MeshLambertMaterial(); 
+    if (item.tipo === 'cor') { 
+        mat.color.set(item.cor); 
+    } else { 
+        // CORREÇÃO PIPETA/IMPORT: Permite reconstruir textura via URL crua ou clone visual
+        const tex = item.textura ? item.textura.clone() : new THREE.TextureLoader().load(item.dataUrl); 
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(repeatX, repeatY); 
+        mat.map = tex; mat.color.set(0xffffff); 
+    } 
+    return mat; 
+}
 function aplicarMaterialNaFace(mesh, faceIndex, item) { registrarPintura(mesh); let repeatX = 1, repeatY = 1; if (mesh.geometry && mesh.geometry.parameters) { const { width, height, depth } = mesh.geometry.parameters; if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; } } const novosMateriais = [...mesh.material]; novosMateriais[faceIndex] = gerarMaterialPintura(item, repeatX, repeatY); mesh.material = novosMateriais; finalizarPintura(mesh); }
 function pintarFacePorNormalMundial(mesh, targetNormal, item) { const tNorm = targetNormal.clone().normalize(); const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)]; for (let i = 0; i < 6; i++) { const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); if (worldNormal.dot(tNorm) > 0.5) aplicarMaterialNaFace(mesh, i, item); } }
 function removerMaterialNaFace(mesh, faceIndex, matBase) { registrarPintura(mesh); const novosMateriais = [...mesh.material]; novosMateriais[faceIndex] = matBase.clone(); mesh.material = novosMateriais; finalizarPintura(mesh); }
@@ -769,6 +830,9 @@ function distanciaPontoSegmento(px, pz, ax, az, bx, bz) { const compSq = (bx-ax)
 function paredeQueBloqueia(x1, z1, x2, z2) { const midX = (x1+x2)/2, midZ = (z1+z2)/2; return paredesConstruidas.find(p => p.nivel === configsCamera.nivel && !p.isCerca && distanciaPontoSegmento(midX, midZ, p.ax, p.az, p.bx, p.bz) < 0.2) || null; }
 function encontrarAreaFechada(xInicial, zInicial) { const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = []; const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2; while (pilha.length && celulas.length < 50000) { const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`; if (visitados.has(chave)) continue; visitados.add(chave); if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; celulas.push(atual); [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => { const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid; if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz }); }); } return { celulas }; }
 
+// ----------------------------------------------------
+// GERENCIADOR DE VISIBILIDADE 
+// ----------------------------------------------------
 function setOpacity(mesh, isTransparent, opacity) { 
     if (!mesh) return; 
     if (mesh.type === 'Group') { 
