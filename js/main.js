@@ -1,30 +1,23 @@
-// main.js - Ponto de entrada da aplicação
+// main.js - Ponto de entrada da aplicação modular
 import { scene, camera, renderer, canvas } from './engine.js';
 import { iniciarMapa } from './mapa.js';
 import { iniciarControles } from './controles.js';
+import { iniciarUI } from './ui.js';
+import './construtor.js'; // Apenas importa para ativar os listeners de mouse
 
-// Inicia o chão escuro com a grade
+// Inicia chão e grid
 iniciarMapa();
 
-// Inicia o pan/zoom isométrico e guarda a função do teclado
+// Inicia botões e abas HTML
+iniciarUI();
+
+// Inicia câmera isométrica e movimentação (Pan/Zoom/WASD)
 const atualizarTeclado = iniciarControles(canvas);
 
-// Loop de renderização principal
+// Loop principal de renderização
 function animar() {
   requestAnimationFrame(animar);
-  atualizarTeclado(); // Processa WASD continuamente
+  atualizarTeclado();
   renderer.render(scene, camera);
 }
 animar();
-
-// Controle provisório das abas do HUD
-document.querySelectorAll('.node-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.sub-panel').forEach(panel => panel.classList.remove('active'));
-    const targetId = btn.getAttribute('data-target');
-    const targetPanel = document.getElementById(targetId);
-    if(targetPanel) targetPanel.classList.add('active');
-  });
-});
