@@ -1,4 +1,4 @@
-// js/construtor.js - Múltiplos Andares, Gizmo, Z-Fighting Fix, Pipeta e QoL
+// js/construtor.js - Múltiplos Andares, Dungeons, Gizmo e QoL
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
@@ -19,7 +19,6 @@ let escadaSelecionada = null;
 let movendoSelecionado = false;
 let pontoA = null; 
 
-// --- VARIAVEIS SETAS RESIZE ---
 let arrastandoSeta = null;
 let comodoArrastadoBounds = null;
 
@@ -38,7 +37,6 @@ grupoSetas.visible = false;
 grupoSetas.renderOrder = 999; 
 scene.add(grupoSetas);
 
-// --- MOTOR DE HISTÓRICO BLINDADO ---
 const historicoUndo = [];
 const historicoRedo = [];
 let acaoAtual = null;
@@ -148,7 +146,6 @@ function finalizarPintura(mesh) {
     if (p) p.newMats = Array.isArray(mesh.material) ? [...mesh.material] : mesh.material.clone();
 }
 
-// --- MATERIAIS E OBJETOS BASE ---
 const materialParede = new THREE.MeshLambertMaterial({ color: 0x6a5f48 });
 const materialCerca = new THREE.MeshLambertMaterial({ color: 0x5a4f38 }); 
 const materialPiso = new THREE.MeshLambertMaterial({ color: 0x8a7550 });
@@ -194,9 +191,6 @@ function raycastObjetosDoNivel(clientX, clientY) {
   return hits.length ? hits[0] : null;
 }
 
-// ----------------------------------------------------
-// A LÓGICA DO GIZMO E DAS SETAS DE ESTICAR
-// ----------------------------------------------------
 export function setModoAtivo(modo) {
   modoAtivo = modo;
   arrastandoConstrucao = false;
@@ -222,22 +216,14 @@ function limparSelecao() {
 
 function atualizarSetasResize() {
     if (!comodoSelecionado) { grupoSetas.visible = false; return; }
-    
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     comodoSelecionado.paredes.forEach(p => {
         minX = Math.min(minX, p.ax, p.bx); maxX = Math.max(maxX, p.ax, p.bx);
         minZ = Math.min(minZ, p.az, p.bz); maxZ = Math.max(maxZ, p.az, p.bz);
     });
-    
-    const cx = (minX + maxX) / 2;
-    const cz = (minZ + maxZ) / 2;
-    const h = (configsCamera.nivel * obterAltura()) + (obterAltura() / 2);
-
-    setaN.position.set(cx, h, minZ - 1.2);
-    setaS.position.set(cx, h, maxZ + 1.2);
-    setaE.position.set(maxX + 1.2, h, cz);
-    setaW.position.set(minX - 1.2, h, cz);
-
+    const cx = (minX + maxX) / 2; const cz = (minZ + maxZ) / 2; const h = (configsCamera.nivel * obterAltura()) + (obterAltura() / 2);
+    setaN.position.set(cx, h, minZ - 1.2); setaS.position.set(cx, h, maxZ + 1.2);
+    setaE.position.set(maxX + 1.2, h, cz); setaW.position.set(minX - 1.2, h, cz);
     grupoSetas.visible = true;
 }
 
@@ -320,10 +306,6 @@ function atualizarGeometriaPilar(pilar) {
     pilar.mesh.position.set(pilar.x, alturaBase + pilar.altura/2, pilar.z);
 }
 
-// ----------------------------------------------------
-// INTERAÇÕES PRINCIPAIS E MOUSE (MEDIDAS E PIPETA)
-// ----------------------------------------------------
-
 canvas?.addEventListener('dblclick', e => {
   const hit = raycastPlanoBase(e.clientX, e.clientY);
   if (hit) { orbitAlvo.x = hit.point.x; orbitAlvo.z = hit.point.z; atualizarCamera(); showAviso("Câmera focada!"); }
@@ -338,7 +320,6 @@ canvas?.addEventListener('pointerdown', e => {
       return;
   }
 
-  // O CLIQUE INTELIGENTE DO MODO NAVEGAR E SELEÇÃO
   if (!modoAtivo && e.button === 0 && !e.altKey && !e.ctrlKey && !e.shiftKey) {
       if (grupoSetas.visible) {
           raycaster.setFromCamera(mouseNdc, camera);
@@ -405,7 +386,6 @@ canvas?.addEventListener('pointerdown', e => {
      return;
   }
 
-  // --- NOVA LÓGICA DE PINTURA E PIPETA ---
   if (modoAtivo === 'pintura') {
       const isRemocao = e.ctrlKey; 
       const isPipeta = e.altKey;
@@ -416,7 +396,6 @@ canvas?.addEventListener('pointerdown', e => {
 
       const targetObject = hitAll ? hitAll.object : null;
 
-      // PIPETA (CONTA-GOTAS)
       if (isPipeta) {
           if (targetObject && targetObject.material) {
               let matAlvo = targetObject.material;
@@ -615,7 +594,6 @@ canvas?.addEventListener('pointermove', e => {
     cursor3D.visible = true;
 
     if (arrastandoConstrucao && pontoA) {
-      // ATUALIZAÇÃO DO MEDIDOR NA TELA
       if(divMedida) {
           divMedida.style.display = 'block'; divMedida.style.left = (e.clientX + 15) + 'px'; divMedida.style.top = (e.clientY + 15) + 'px';
           const dxM = Math.abs(px - pontoA.x) / configMapa.tamanhoGrid, dzM = Math.abs(pz - pontoA.z) / configMapa.tamanhoGrid;
@@ -794,7 +772,7 @@ function paredeQueBloqueia(x1, z1, x2, z2) { const midX = (x1+x2)/2, midZ = (z1+
 function encontrarAreaFechada(xInicial, zInicial) { const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = []; const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2; while (pilha.length && celulas.length < 50000) { const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`; if (visitados.has(chave)) continue; visitados.add(chave); if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; celulas.push(atual); [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => { const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid; if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz }); }); } return { celulas }; }
 
 // ----------------------------------------------------
-// GERENCIADOR DE VISIBILIDADE 
+// GERENCIADOR DE VISIBILIDADE E FANTASMA
 // ----------------------------------------------------
 function setOpacity(mesh, isTransparent, opacity) { 
     if (!mesh) return; 
@@ -815,6 +793,13 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
   if (modoVisaoManual) modoVisaoAtual = modoVisaoManual; 
   const mostrarFantasma = (modoAtivo === 'coluna'); 
   
+  // --- MÁGICA DOS SUBSOLOS ---
+  // Se estamos escavando (nível < 0), apagamos o chão da superfície para podermos ver lá pra baixo!
+  if (meshChaoBase) meshChaoBase.visible = (configsCamera.nivel >= 0);
+  
+  // A grade acompanha o jogador, seja no subsolo ou no céu.
+  if (gridHelper) gridHelper.position.y = (configsCamera.nivel * obterAltura()) + 0.01;
+
   const aplicarParede = (obj) => { 
       if (obj.nivel > configsCamera.nivel) { 
           obj.mesh.visible = false; 

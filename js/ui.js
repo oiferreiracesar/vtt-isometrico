@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML (Com Pipeta Inteligente)
+// js/ui.js - Gerenciamento da Interface HTML (Com Suporte a Dungeons/Subsolos)
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarLarguraEscada } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -31,7 +31,6 @@ let proximoIdPaleta = 1;
 
 export function itemSelecionadoAtual() { return paleta.find(p => p.id === idPaletaSelecionada) || null; }
 
-// A MÁGICA DA PIPETA ACONTECE AQUI
 export function selecionarMaterialNaPaleta(matAlvo) {
   if (!matAlvo) return;
   let match = null;
@@ -153,8 +152,20 @@ export function iniciarUI() {
   document.getElementById('camRotLeft')?.addEventListener('click', () => { configsCamera.angulo -= Math.PI / 2; atualizarCamera(); });
   document.getElementById('camRotRight')?.addEventListener('click', () => { configsCamera.angulo += Math.PI / 2; atualizarCamera(); });
   
-  document.getElementById('camUp')?.addEventListener('click', () => { configsCamera.nivel += 1; atualizarCamera(); atualizarVisibilidadeAndares(); showAviso(`Subiu para o Nível ${configsCamera.nivel}.`); });
-  document.getElementById('camDown')?.addEventListener('click', () => { configsCamera.nivel = Math.max(0, configsCamera.nivel - 1); atualizarCamera(); atualizarVisibilidadeAndares(); showAviso(configsCamera.nivel === 0 ? `Desceu para o Térreo.` : `Desceu para o Nível ${configsCamera.nivel}.`); });
+  // --- MÁGICA DOS SUBSOLOS (Liberação das amarras do nível 0) ---
+  document.getElementById('camUp')?.addEventListener('click', () => { 
+      configsCamera.nivel += 1; 
+      atualizarCamera(); 
+      atualizarVisibilidadeAndares(); 
+      showAviso(configsCamera.nivel === 0 ? `Subiu para o Térreo.` : (configsCamera.nivel > 0 ? `Subiu para o Nível ${configsCamera.nivel}.` : `Subiu para o Subsolo ${Math.abs(configsCamera.nivel)}.`)); 
+  });
+  
+  document.getElementById('camDown')?.addEventListener('click', () => { 
+      configsCamera.nivel -= 1; // Agora o céu e o inferno são o limite!
+      atualizarCamera(); 
+      atualizarVisibilidadeAndares(); 
+      showAviso(configsCamera.nivel === 0 ? `Desceu para o Térreo.` : (configsCamera.nivel > 0 ? `Desceu para o Nível ${configsCamera.nivel}.` : `Desceu para o Subsolo ${Math.abs(configsCamera.nivel)}.`)); 
+  });
 
   const btnWallFull = document.getElementById('camWallFull'), btnWallCut = document.getElementById('camWallCut'), btnWallLow = document.getElementById('camWallLow');
   function clearWallActive() { [btnWallFull, btnWallCut, btnWallLow].forEach(b => b?.classList.remove('ativo')); }
