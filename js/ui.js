@@ -1,5 +1,5 @@
 // js/ui.js - Gerenciamento da Interface HTML e Paleta
-import { setModoAtivo, atualizarVisibilidadeAndares, modoVisaoAtual } from './construtor.js';
+import { setModoAtivo, atualizarVisibilidadeAndares, modoVisaoAtual, desfazer, refazer } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
 
@@ -91,9 +91,12 @@ export function iniciarUI() {
     });
   });
 
-  // NOVO MODO DE SELEÇÃO E GRUPO
+  // BOTÕES DE HISTÓRICO
+  document.getElementById('btnDesfazer').addEventListener('click', desfazer);
+  document.getElementById('btnRefazer').addEventListener('click', refazer);
+
+  // FERRAMENTAS
   document.getElementById('btnModoSelecao').addEventListener('click', () => ativarFerramenta('btnModoSelecao', 'selecao', 'Seleção: Clique e segure para Mover o cômodo pelo mapa.'));
-  
   document.getElementById('btnModoParede').addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
   document.getElementById('btnModoCerca').addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
   document.getElementById('btnModoRetangulo').addEventListener('click', () => ativarFerramenta('btnModoRetangulo', 'retangulo', 'Sala Retangular: Clique e arraste.'));
