@@ -1,4 +1,4 @@
-// js/construtor.js - Múltiplos Andares, Dungeons, Gizmo e QoL
+// js/construtor.js - Múltiplos Andares, Gizmo e FOG OF WAR (Profundidade)
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
@@ -36,6 +36,12 @@ grupoSetas.add(setaN, setaS, setaE, setaW);
 grupoSetas.visible = false;
 grupoSetas.renderOrder = 999; 
 scene.add(grupoSetas);
+
+// --- O VÉU DA PROFUNDIDADE (FOG OF WAR INFERIOR) ---
+const matFog = new THREE.MeshBasicMaterial({ color: 0x05080c, transparent: true, opacity: 0.65, depthWrite: false });
+const fogAndares = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), matFog);
+fogAndares.rotation.x = -Math.PI / 2;
+scene.add(fogAndares);
 
 const historicoUndo = [];
 const historicoRedo = [];
@@ -185,7 +191,6 @@ function raycastObjetosDoNivel(clientX, clientY) {
   const escadasF = []; escadasConstruidas.forEach(e => { if (e.nivel === configsCamera.nivel) escadasF.push(...e.mesh.children); });
   
   const objetosNivel = [...paredesF, ...pilaresF, ...pisosF, ...colunasF, ...escadasF];
-  // NOVO: Adiciona o chão escuro da masmorra no laser do mouse se estivermos no subsolo!
   if (configsCamera.nivel === 0 && meshChaoBase) objetosNivel.push(meshChaoBase);
   if (configsCamera.nivel < 0 && meshChaoMasmorra) objetosNivel.push(meshChaoMasmorra);
 
@@ -681,7 +686,7 @@ function paredeQueBloqueia(x1, z1, x2, z2) { const midX = (x1+x2)/2, midZ = (z1+
 function encontrarAreaFechada(xInicial, zInicial) { const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = []; const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2; while (pilha.length && celulas.length < 50000) { const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`; if (visitados.has(chave)) continue; visitados.add(chave); if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; celulas.push(atual); [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => { const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid; if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz }); }); } return { celulas }; }
 
 // ----------------------------------------------------
-// GERENCIADOR DE VISIBILIDADE E CHÃO DE MASMORRA
+// GERENCIADOR DE VISIBILIDADE 
 // ----------------------------------------------------
 function setOpacity(mesh, isTransparent, opacity) { 
     if (!mesh) return; 
@@ -702,16 +707,18 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
   if (modoVisaoManual) modoVisaoAtual = modoVisaoManual; 
   const mostrarFantasma = (modoAtivo === 'coluna'); 
   
-  // --- MÁGICA DOS SUBSOLOS CORRIGIDA ---
-  // Quando descemos pro nível < 0, a grama verde se esconde e o chão escuro de pedra surge!
+  const alturaAtual = configsCamera.nivel * obterAltura();
+  
   if (meshChaoBase) meshChaoBase.visible = (configsCamera.nivel >= 0);
   if (meshChaoMasmorra) {
       meshChaoMasmorra.visible = (configsCamera.nivel < 0);
-      meshChaoMasmorra.position.y = (configsCamera.nivel * obterAltura()) - 0.05; // Chão desce e fica um pouco abaixo da grade
+      meshChaoMasmorra.position.y = alturaAtual - 0.01; 
   }
   
-  // A grade acompanha o jogador pro fundo do buraco
-  if (gridHelper) gridHelper.position.y = (configsCamera.nivel * obterAltura()) + 0.01;
+  // A MÁGICA DO VÉU DA PROFUNDIDADE (FOG DE ANDAR)
+  fogAndares.position.y = alturaAtual - 0.02; 
+  
+  if (gridHelper) gridHelper.position.y = alturaAtual + 0.01;
 
   const aplicarParede = (obj) => { 
       if (obj.nivel > configsCamera.nivel) { 
@@ -732,8 +739,8 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
   [pisosConstruidos, escadasConstruidas].forEach(arr => { 
       arr.forEach(obj => { 
           if (obj.nivel > configsCamera.nivel) { 
-              if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) { obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); } 
-              else obj.mesh.visible = false; 
+              // O HOLOGRAMA DO ANDAR DE CIMA (FOG SUPERIOR)
+              obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.35); 
           } else { 
               obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); 
           } 
