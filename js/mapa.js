@@ -1,9 +1,10 @@
-// js/mapa.js - Gerenciamento do chão e dimensões do tabuleiro
+// js/mapa.js - Gerenciamento do chão, dungeons e dimensões do tabuleiro
 import { scene } from './engine.js';
 
 export let configMapa = { largura: 32, profundidade: 18, tamanhoGrid: 1 };
 export let meshChaoBase;
-let gridHelper;
+export let meshChaoMasmorra; // NOVO: Chão escuro para Subsolos
+export let gridHelper; 
 
 export function iniciarMapa() { reconstruirGrid(); }
 
@@ -14,14 +15,22 @@ export function redimensionarMapa(novaLargura, novaProfundidade) {
 
 export function reconstruirGrid() {
   if (meshChaoBase) scene.remove(meshChaoBase);
+  if (meshChaoMasmorra) scene.remove(meshChaoMasmorra);
   if (gridHelper) scene.remove(gridHelper);
   
+  // Chão Térreo (Grama/Terra)
   const materialChaoBase = new THREE.MeshLambertMaterial({ color: 0x2a2620 });
   meshChaoBase = new THREE.Mesh(new THREE.PlaneGeometry(configMapa.largura, configMapa.profundidade), materialChaoBase);
   meshChaoBase.rotation.x = -Math.PI / 2;
   meshChaoBase.position.y = 0;
-  
   scene.add(meshChaoBase);
+
+  // Chão Masmorra (Pedra Escura)
+  const materialMasmorra = new THREE.MeshLambertMaterial({ color: 0x121215 });
+  meshChaoMasmorra = new THREE.Mesh(new THREE.PlaneGeometry(configMapa.largura, configMapa.profundidade), materialMasmorra);
+  meshChaoMasmorra.rotation.x = -Math.PI / 2;
+  meshChaoMasmorra.visible = false; // Começa invisível até descermos
+  scene.add(meshChaoMasmorra);
 
   const pontos = [];
   const meiaLargura = configMapa.largura / 2, meiaProfundidade = configMapa.profundidade / 2;
@@ -32,6 +41,7 @@ export function reconstruirGrid() {
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pontos, 3));
-  gridHelper = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x4a4030, transparent: true, opacity: 0.5 }));
+  // Grade ligeiramente mais visível e brilhante
+  gridHelper = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x706050, transparent: true, opacity: 0.8 })); 
   scene.add(gridHelper);
 }

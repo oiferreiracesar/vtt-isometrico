@@ -1,6 +1,6 @@
 // js/construtor.js - Múltiplos Andares, Dungeons, Gizmo e QoL
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
-import { configMapa, meshChaoBase, gridHelper } from './mapa.js';
+import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
 
 export let modoAtivo = null;
@@ -185,7 +185,9 @@ function raycastObjetosDoNivel(clientX, clientY) {
   const escadasF = []; escadasConstruidas.forEach(e => { if (e.nivel === configsCamera.nivel) escadasF.push(...e.mesh.children); });
   
   const objetosNivel = [...paredesF, ...pilaresF, ...pisosF, ...colunasF, ...escadasF];
+  // NOVO: Adiciona o chão escuro da masmorra no laser do mouse se estivermos no subsolo!
   if (configsCamera.nivel === 0 && meshChaoBase) objetosNivel.push(meshChaoBase);
+  if (configsCamera.nivel < 0 && meshChaoMasmorra) objetosNivel.push(meshChaoMasmorra);
 
   const hits = raycaster.intersectObjects(objetosNivel, true);
   return hits.length ? hits[0] : null;
@@ -205,13 +207,8 @@ export function setModoAtivo(modo) {
 function limparSelecao() {
     if (comodoSelecionado) comodoSelecionado.paredes.forEach(p => p.mesh.material.forEach(m => m.emissive.setHex(0x000000)));
     if (escadaSelecionada) escadaSelecionada.mesh.children.forEach(c => c.material.emissive.setHex(0x000000));
-    
-    comodoSelecionado = null;
-    escadaSelecionada = null;
-    movendoSelecionado = false;
-    arrastandoSeta = null;
-    esconderGizmo();
-    grupoSetas.visible = false;
+    comodoSelecionado = null; escadaSelecionada = null; movendoSelecionado = false; arrastandoSeta = null;
+    esconderGizmo(); grupoSetas.visible = false;
 }
 
 function atualizarSetasResize() {
@@ -229,12 +226,8 @@ function atualizarSetasResize() {
 
 export function iniciarArrasteSelecionado() {
     if (!comodoSelecionado && !escadaSelecionada) return;
-    movendoSelecionado = true;
-    esconderGizmo();
-    grupoSetas.visible = false;
-    iniciarAcao();
-    pontoA = null; 
-    showAviso("Colado no mouse. Clique para soltar!");
+    movendoSelecionado = true; esconderGizmo(); grupoSetas.visible = false;
+    iniciarAcao(); pontoA = null; showAviso("Colado no mouse. Clique para soltar!");
 }
 
 export function girarSelecionado(sentido) {
@@ -251,13 +244,11 @@ export function girarSelecionado(sentido) {
         comodoSelecionado.paredes.forEach(p => {
             const nx1 = cx + (p.ax - cx) * cos - (p.az - cz) * sin, nz1 = cz + (p.ax - cx) * sin + (p.az - cz) * cos;
             const nx2 = cx + (p.bx - cx) * cos - (p.bz - cz) * sin, nz2 = cz + (p.bx - cx) * sin + (p.bz - cz) * cos;
-            p.ax = nx1; p.az = nz1; p.bx = nx2; p.bz = nz2;
-            atualizarGeometriaParede(p);
+            p.ax = nx1; p.az = nz1; p.bx = nx2; p.bz = nz2; atualizarGeometriaParede(p);
         });
         comodoSelecionado.pilares.forEach(p => {
             const nx = cx + (p.x - cx) * cos - (p.z - cz) * sin, nz = cz + (p.x - cx) * sin + (p.z - cz) * cos;
-            p.x = nx; p.z = nz;
-            atualizarGeometriaPilar(p);
+            p.x = nx; p.z = nz; atualizarGeometriaPilar(p);
         });
         atualizarSetasResize();
     } else if (escadaSelecionada) {
@@ -270,10 +261,7 @@ export function alterarLarguraEscada(direcao) {
     if (!escadaSelecionada) return;
     const newLargura = Math.max(configMapa.tamanhoGrid, escadaSelecionada.largura + (direcao * configMapa.tamanhoGrid));
     if (newLargura === escadaSelecionada.largura) return; 
-    
-    iniciarAcao();
-    reconstruirDegrausEscada(escadaSelecionada, newLargura);
-    finalizarAcao();
+    iniciarAcao(); reconstruirDegrausEscada(escadaSelecionada, newLargura); finalizarAcao();
     showAviso(`Largura alterada para ${newLargura / configMapa.tamanhoGrid} quadrados.`);
 }
 
@@ -283,12 +271,8 @@ export function deletarSelecionado() {
         const pArray = [...comodoSelecionado.paredes], pilArray = [...comodoSelecionado.pilares];
         pArray.forEach(p => removerObjetoMundo('parede', p, paredesConstruidas));
         pilArray.forEach(p => removerObjetoMundo('pilar', p, pilaresConstruidos));
-    } else if (escadaSelecionada) {
-        removerObjetoMundo('escada', escadaSelecionada, escadasConstruidas);
-    }
-    limparSelecao();
-    finalizarAcao();
-    showAviso("Demolido.");
+    } else if (escadaSelecionada) { removerObjetoMundo('escada', escadaSelecionada, escadasConstruidas); }
+    limparSelecao(); finalizarAcao(); showAviso("Demolido.");
 }
 
 function atualizarGeometriaParede(parede) {
@@ -316,8 +300,7 @@ canvas?.addEventListener('pointerdown', e => {
   
   if (movendoSelecionado) {
       movendoSelecionado = false; pontoA = null; finalizarAcao(); limparSelecao();
-      showAviso("Posicionado!");
-      return;
+      showAviso("Posicionado!"); return;
   }
 
   if (!modoAtivo && e.button === 0 && !e.altKey && !e.ctrlKey && !e.shiftKey) {
@@ -325,8 +308,7 @@ canvas?.addEventListener('pointerdown', e => {
           raycaster.setFromCamera(mouseNdc, camera);
           const hitsSetas = raycaster.intersectObjects(grupoSetas.children);
           if (hitsSetas.length > 0) {
-              arrastandoSeta = hitsSetas[0].object.userData.dir;
-              esconderGizmo();
+              arrastandoSeta = hitsSetas[0].object.userData.dir; esconderGizmo();
               let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
               comodoSelecionado.paredes.forEach(p => {
                   minX = Math.min(minX, p.ax, p.bx); maxX = Math.max(maxX, p.ax, p.bx);
@@ -340,14 +322,12 @@ canvas?.addEventListener('pointerdown', e => {
       }
 
       const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
-      if (hitAll && hitAll.object !== meshChaoBase) {
+      if (hitAll && hitAll.object !== meshChaoBase && hitAll.object !== meshChaoMasmorra) {
           const isEscada = escadasConstruidas.find(esc => esc.mesh === hitAll.object.parent);
           if (isEscada) {
-              limparSelecao();
-              escadaSelecionada = isEscada;
+              limparSelecao(); escadaSelecionada = isEscada;
               escadaSelecionada.mesh.children.forEach(c => c.material.emissive.setHex(0x2a2a2a));
-              mostrarGizmo(e.clientX, e.clientY);
-              return;
+              mostrarGizmo(e.clientX, e.clientY); return;
           }
           const objClicado = paredesConstruidas.find(p => p.mesh === hitAll.object) || pilaresConstruidos.find(p => p.mesh === hitAll.object);
           if (objClicado && objClicado.comodoId) {
@@ -355,14 +335,11 @@ canvas?.addEventListener('pointerdown', e => {
               comodoSelecionado = comodosConstruidos.find(c => c.id === objClicado.comodoId);
               if (comodoSelecionado) {
                   comodoSelecionado.paredes.forEach(p => p.mesh.material.forEach(m => m.emissive.setHex(0x2a2a2a)));
-                  mostrarGizmo(e.clientX, e.clientY);
-                  atualizarSetasResize();
-                  return;
+                  mostrarGizmo(e.clientX, e.clientY); atualizarSetasResize(); return;
               }
           }
       }
-      limparSelecao(); 
-      return;
+      limparSelecao(); return;
   }
 
   if (!modoAtivo) return; 
@@ -387,9 +364,7 @@ canvas?.addEventListener('pointerdown', e => {
   }
 
   if (modoAtivo === 'pintura') {
-      const isRemocao = e.ctrlKey; 
-      const isPipeta = e.altKey;
-      
+      const isRemocao = e.ctrlKey; const isPipeta = e.altKey;
       const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
       const chaoHit = raycastPlanoBase(e.clientX, e.clientY);
       if (!hitAll && !chaoHit) return;
@@ -412,7 +387,6 @@ canvas?.addEventListener('pointerdown', e => {
       if (!isRemocao && !item) return;
 
       const clickPoint = hitAll ? hitAll.point : chaoHit.point;
-
       const isEscada = targetObject && escadasConstruidas.some(e => e.mesh === targetObject.parent);
       if (isEscada) {
           const escada = escadasConstruidas.find(e => e.mesh === targetObject.parent);
@@ -421,8 +395,7 @@ canvas?.addEventListener('pointerdown', e => {
               step.material = isRemocao ? materialPiso.clone() : gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid); 
               finalizarPintura(step);
           });
-          escada.textura = isRemocao ? null : item; 
-          return;
+          escada.textura = isRemocao ? null : item; return;
       }
 
       const isParede = targetObject && paredesConstruidas.some(p => p.mesh === targetObject);
@@ -430,17 +403,13 @@ canvas?.addEventListener('pointerdown', e => {
       const isColuna = targetObject && colunasSustentacao.some(p => p.mesh === targetObject);
 
       if (e.shiftKey) {
-          let startX = snapCentroCelula(clickPoint.x);
-          let startZ = snapCentroCelula(clickPoint.z);
-
+          let startX = snapCentroCelula(clickPoint.x); let startZ = snapCentroCelula(clickPoint.z);
           if (targetObject && (isParede || isPilar)) {
               const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
               const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
               const worldNormal = localNormals[faceClicada].clone().applyQuaternion(targetObject.quaternion).normalize();
-              startX = snapCentroCelula(clickPoint.x + worldNormal.x * 0.1);
-              startZ = snapCentroCelula(clickPoint.z + worldNormal.z * 0.1);
+              startX = snapCentroCelula(clickPoint.x + worldNormal.x * 0.1); startZ = snapCentroCelula(clickPoint.z + worldNormal.z * 0.1);
           }
-
           const { celulas } = encontrarAreaFechada(startX, startZ);
           if (targetObject && (isParede || isPilar)) {
              celulas.forEach(c => {
@@ -449,53 +418,26 @@ canvas?.addEventListener('pointerdown', e => {
                   const p = paredeQueBloqueia(c.x, c.z, c.x + dx, c.z + dz);
                   if (p && !p.isPorta && !p.isCerca) { 
                      const dirNorm = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z).normalize();
-                     if (isRemocao) {
-                         removerPinturaFacePorNormal(p.mesh, dirNorm, materialParede);
-                         if (p.pilarA) removerPinturaFacePorNormal(p.pilarA.mesh, dirNorm, materialParede);
-                         if (p.pilarB) removerPinturaFacePorNormal(p.pilarB.mesh, dirNorm, materialParede);
-                     } else {
-                         pintarFacePorNormalMundial(p.mesh, dirNorm, item);
-                         if (p.pilarA) pintarFacePorNormalMundial(p.pilarA.mesh, dirNorm, item);
-                         if (p.pilarB) pintarFacePorNormalMundial(p.pilarB.mesh, dirNorm, item);
-                     }
+                     if (isRemocao) { removerPinturaFacePorNormal(p.mesh, dirNorm, materialParede); if (p.pilarA) removerPinturaFacePorNormal(p.pilarA.mesh, dirNorm, materialParede); if (p.pilarB) removerPinturaFacePorNormal(p.pilarB.mesh, dirNorm, materialParede);
+                     } else { pintarFacePorNormalMundial(p.mesh, dirNorm, item); if (p.pilarA) pintarFacePorNormalMundial(p.pilarA.mesh, dirNorm, item); if (p.pilarB) pintarFacePorNormalMundial(p.pilarB.mesh, dirNorm, item); }
                   }
                });
              });
           } else { celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); }
       } else {
           if (targetObject && (isParede || isPilar || isColuna)) {
-              const paredeObj = paredesConstruidas.find(p => p.mesh === targetObject);
-              const pilarObj = pilaresConstruidos.find(p => p.mesh === targetObject);
-              const colunaObj = colunasSustentacao.find(p => p.mesh === targetObject);
-
+              const paredeObj = paredesConstruidas.find(p => p.mesh === targetObject); const pilarObj = pilaresConstruidos.find(p => p.mesh === targetObject); const colunaObj = colunasSustentacao.find(p => p.mesh === targetObject);
               if (colunaObj || pilarObj || (paredeObj && paredeObj.isCerca)) {
                   const baseMat = (paredeObj && paredeObj.isCerca) || (pilarObj && pilarObj.isCerca) ? materialCerca : materialParede;
-                  for (let i = 0; i < 6; i++) {
-                      if (isRemocao) removerMaterialNaFace(targetObject, i, baseMat);
-                      else aplicarMaterialNaFace(targetObject, i, item);
-                  }
+                  for (let i = 0; i < 6; i++) { if (isRemocao) removerMaterialNaFace(targetObject, i, baseMat); else aplicarMaterialNaFace(targetObject, i, item); }
               } else {
                   const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
                   const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
                   const worldNormal = localNormals[faceClicada].clone().applyQuaternion(targetObject.quaternion).normalize();
-                  if (isRemocao) {
-                      removerPinturaFacePorNormal(targetObject, worldNormal, materialParede);
-                      if (paredeObj && !paredeObj.isPorta) {
-                          if (paredeObj.pilarA) removerPinturaFacePorNormal(paredeObj.pilarA.mesh, worldNormal, materialParede);
-                          if (paredeObj.pilarB) removerPinturaFacePorNormal(paredeObj.pilarB.mesh, worldNormal, materialParede);
-                      }
-                  } else {
-                      pintarFacePorNormalMundial(targetObject, worldNormal, item);
-                      if (paredeObj && !paredeObj.isPorta) {
-                          if (paredeObj.pilarA) pintarFacePorNormalMundial(paredeObj.pilarA.mesh, worldNormal, item);
-                          if (paredeObj.pilarB) pintarFacePorNormalMundial(paredeObj.pilarB.mesh, worldNormal, item);
-                      }
-                  }
+                  if (isRemocao) { removerPinturaFacePorNormal(targetObject, worldNormal, materialParede); if (paredeObj && !paredeObj.isPorta) { if (paredeObj.pilarA) removerPinturaFacePorNormal(paredeObj.pilarA.mesh, worldNormal, materialParede); if (paredeObj.pilarB) removerPinturaFacePorNormal(paredeObj.pilarB.mesh, worldNormal, materialParede); }
+                  } else { pintarFacePorNormalMundial(targetObject, worldNormal, item); if (paredeObj && !paredeObj.isPorta) { if (paredeObj.pilarA) pintarFacePorNormalMundial(paredeObj.pilarA.mesh, worldNormal, item); if (paredeObj.pilarB) pintarFacePorNormalMundial(paredeObj.pilarB.mesh, worldNormal, item); } }
               }
-          } else { 
-              const cx = snapCentroCelula(clickPoint.x); const cz = snapCentroCelula(clickPoint.z);
-              if (isRemocao) removerPiso(cx, cz); else aplicarPiso(cx, cz, item); 
-          }
+          } else { const cx = snapCentroCelula(clickPoint.x); const cz = snapCentroCelula(clickPoint.z); if (isRemocao) removerPiso(cx, cz); else aplicarPiso(cx, cz, item); }
       }
       return; 
   }
@@ -505,37 +447,17 @@ canvas?.addEventListener('pointermove', e => {
   if (!modoAtivo && arrastandoSeta && comodoSelecionado) {
         const hit = raycastPlanoBase(e.clientX, e.clientY);
         if (hit) {
-            const px = snapGrid(hit.point.x);
-            const pz = snapGrid(hit.point.z);
-            const cb = comodoArrastadoBounds;
-            
-            let scaleX = 1; let scaleZ = 1; let dX = 0; let dZ = 0;
-            const minSize = configMapa.tamanhoGrid;
+            const px = snapGrid(hit.point.x), pz = snapGrid(hit.point.z); const cb = comodoArrastadoBounds;
+            let scaleX = 1; let scaleZ = 1; let dX = 0; let dZ = 0; const minSize = configMapa.tamanhoGrid;
 
-            if (arrastandoSeta === 'E') {
-                const newMaxX = Math.max(cb.minX + minSize, px);
-                scaleX = (newMaxX - cb.minX) / (cb.maxX - cb.minX || 1);
-                dX = cb.minX; 
-            } else if (arrastandoSeta === 'W') {
-                const newMinX = Math.min(cb.maxX - minSize, px);
-                scaleX = (cb.maxX - newMinX) / (cb.maxX - cb.minX || 1);
-                dX = cb.maxX;
-            } else if (arrastandoSeta === 'S') {
-                const newMaxZ = Math.max(cb.minZ + minSize, pz);
-                scaleZ = (newMaxZ - cb.minZ) / (cb.maxZ - cb.minZ || 1);
-                dZ = cb.minZ;
-            } else if (arrastandoSeta === 'N') {
-                const newMinZ = Math.min(cb.maxZ - minSize, pz);
-                scaleZ = (cb.maxZ - newMinZ) / (cb.maxZ - cb.minZ || 1);
-                dZ = cb.maxZ;
-            }
+            if (arrastandoSeta === 'E') { const newMaxX = Math.max(cb.minX + minSize, px); scaleX = (newMaxX - cb.minX) / (cb.maxX - cb.minX || 1); dX = cb.minX; 
+            } else if (arrastandoSeta === 'W') { const newMinX = Math.min(cb.maxX - minSize, px); scaleX = (cb.maxX - newMinX) / (cb.maxX - cb.minX || 1); dX = cb.maxX;
+            } else if (arrastandoSeta === 'S') { const newMaxZ = Math.max(cb.minZ + minSize, pz); scaleZ = (newMaxZ - cb.minZ) / (cb.maxZ - cb.minZ || 1); dZ = cb.minZ;
+            } else if (arrastandoSeta === 'N') { const newMinZ = Math.min(cb.maxZ - minSize, pz); scaleZ = (cb.maxZ - newMinZ) / (cb.maxZ - cb.minZ || 1); dZ = cb.maxZ; }
 
             comodoSelecionado.paredesIniciais.forEach(st => {
-                if (arrastandoSeta === 'E' || arrastandoSeta === 'W') {
-                    st.parede.ax = dX + (st.ax - dX) * scaleX; st.parede.bx = dX + (st.bx - dX) * scaleX;
-                } else {
-                    st.parede.az = dZ + (st.az - dZ) * scaleZ; st.parede.bz = dZ + (st.bz - dZ) * scaleZ;
-                }
+                if (arrastandoSeta === 'E' || arrastandoSeta === 'W') { st.parede.ax = dX + (st.ax - dX) * scaleX; st.parede.bx = dX + (st.bx - dX) * scaleX; } 
+                else { st.parede.az = dZ + (st.az - dZ) * scaleZ; st.parede.bz = dZ + (st.bz - dZ) * scaleZ; }
                 atualizarGeometriaParede(st.parede);
             });
 
@@ -554,8 +476,7 @@ canvas?.addEventListener('pointermove', e => {
       if (chaoHit) {
           const atualX = snapGrid(chaoHit.point.x), atualZ = snapGrid(chaoHit.point.z);
           if (!pontoA) pontoA = { x: atualX, z: atualZ }; 
-          const dx = atualX - pontoA.x, dz = atualZ - pontoA.z;
-          pontoA = { x: atualX, z: atualZ }; 
+          const dx = atualX - pontoA.x, dz = atualZ - pontoA.z; pontoA = { x: atualX, z: atualZ }; 
           
           if (comodoSelecionado) aplicarMovimentoComodo(comodoSelecionado, dx, dz); 
           else if (escadaSelecionada) {
@@ -611,24 +532,15 @@ canvas?.addEventListener('pointermove', e => {
         const w = Math.abs(px - pontoA.x) || 0.1, d = Math.abs(pz - pontoA.z) || 0.1;
         previaMesh.scale.set(w, hTemp, d); previaMesh.position.set((pontoA.x + px)/2, alturaBase + hTemp/2, (pontoA.z + pz)/2); previaMesh.rotation.y = 0; previaMesh.visible = true;
       }
-    } else {
-        if(divMedida) divMedida.style.display = 'none';
-    }
-  } else { 
-      cursor3D.visible = false; 
-      if(divMedida) divMedida.style.display = 'none';
-  }
+    } else { if(divMedida) divMedida.style.display = 'none'; }
+  } else { cursor3D.visible = false; if(divMedida) divMedida.style.display = 'none'; }
 });
 
 window.addEventListener('pointerup', e => {
   const divMedida = document.getElementById('cursor-medida');
   if(divMedida) divMedida.style.display = 'none';
 
-  if (arrastandoSeta) {
-      arrastandoSeta = null;
-      mostrarGizmo(e.clientX, e.clientY);
-      return;
-  }
+  if (arrastandoSeta) { arrastandoSeta = null; mostrarGizmo(e.clientX, e.clientY); return; }
 
   if (arrastandoConstrucao && pontoA) {
     const hit = raycastPlanoBase(e.clientX, e.clientY);
@@ -657,11 +569,8 @@ function aplicarMovimentoComodo(comodo, dx, dz) {
 
 function removerObjetoMundo(tipo, obj, arrayBase) {
     if (!obj) return;
-    registrarRemocao(tipo, obj, arrayBase);
-    scene.remove(obj.mesh);
-    const idx = arrayBase.indexOf(obj);
-    if (idx > -1) arrayBase.splice(idx, 1);
-
+    registrarRemocao(tipo, obj, arrayBase); scene.remove(obj.mesh);
+    const idx = arrayBase.indexOf(obj); if (idx > -1) arrayBase.splice(idx, 1);
     if (obj.comodoId) {
         const c = comodosConstruidos.find(x => x.id === obj.comodoId);
         if (c) {
@@ -736,7 +645,7 @@ export function reconstruirDegrausEscada(escada, novaLargura) {
 }
 
 function executarMarreta(hitObject) {
-  if (!hitObject || hitObject === meshChaoBase) return;
+  if (!hitObject || hitObject === meshChaoBase || hitObject === meshChaoMasmorra) return;
   const isPiso = pisosConstruidos.some(p => p.mesh === hitObject);
   const isParedeMode = ['parede', 'cerca', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo);
   if (isParedeMode && isPiso) return; 
@@ -772,7 +681,7 @@ function paredeQueBloqueia(x1, z1, x2, z2) { const midX = (x1+x2)/2, midZ = (z1+
 function encontrarAreaFechada(xInicial, zInicial) { const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = []; const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2; while (pilha.length && celulas.length < 50000) { const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`; if (visitados.has(chave)) continue; visitados.add(chave); if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; celulas.push(atual); [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => { const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid; if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz }); }); } return { celulas }; }
 
 // ----------------------------------------------------
-// GERENCIADOR DE VISIBILIDADE E FANTASMA
+// GERENCIADOR DE VISIBILIDADE E CHÃO DE MASMORRA
 // ----------------------------------------------------
 function setOpacity(mesh, isTransparent, opacity) { 
     if (!mesh) return; 
@@ -793,11 +702,15 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
   if (modoVisaoManual) modoVisaoAtual = modoVisaoManual; 
   const mostrarFantasma = (modoAtivo === 'coluna'); 
   
-  // --- MÁGICA DOS SUBSOLOS ---
-  // Se estamos escavando (nível < 0), apagamos o chão da superfície para podermos ver lá pra baixo!
+  // --- MÁGICA DOS SUBSOLOS CORRIGIDA ---
+  // Quando descemos pro nível < 0, a grama verde se esconde e o chão escuro de pedra surge!
   if (meshChaoBase) meshChaoBase.visible = (configsCamera.nivel >= 0);
+  if (meshChaoMasmorra) {
+      meshChaoMasmorra.visible = (configsCamera.nivel < 0);
+      meshChaoMasmorra.position.y = (configsCamera.nivel * obterAltura()) - 0.05; // Chão desce e fica um pouco abaixo da grade
+  }
   
-  // A grade acompanha o jogador, seja no subsolo ou no céu.
+  // A grade acompanha o jogador pro fundo do buraco
   if (gridHelper) gridHelper.position.y = (configsCamera.nivel * obterAltura()) + 0.01;
 
   const aplicarParede = (obj) => { 
