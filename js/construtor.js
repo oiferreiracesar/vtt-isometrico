@@ -69,7 +69,6 @@ function raycastParedesEPisos(clientX, clientY) {
 canvas.addEventListener('pointerdown', e => {
   if (e.button !== 0 || !modoAtivo) return;
 
-  // 1. MARRETA (DELETAR COM CTRL)
   if (e.ctrlKey) {
     const hit = raycastParedesEPisos(e.clientX, e.clientY);
     if (hit && hit.object !== meshChaoBase) {
@@ -97,7 +96,6 @@ canvas.addEventListener('pointerdown', e => {
 
   if (e.altKey) return; 
 
-  // 2. INICIAR ARRASTE DE SALA/PAREDE
   if (['parede', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) {
     const hit = raycastChao(e.clientX, e.clientY);
     if (hit) {
@@ -107,7 +105,6 @@ canvas.addEventListener('pointerdown', e => {
     return;
   }
 
-  // 3. PINTAR E PORTAS (CLIQUE SIMPLES)
   const hitAll = raycastParedesEPisos(e.clientX, e.clientY);
   if (!hitAll) return;
 
@@ -129,7 +126,6 @@ canvas.addEventListener('pointerdown', e => {
     const isParede = paredesConstruidas.some(p => p.mesh === hitAll.object);
     const isPilar = pilaresConstruidos.some(p => p.mesh === hitAll.object);
     
-    // PINTAR COM SHIFT (PREENCHER CÔMODO)
     if (e.shiftKey) {
       const centroX = snapCentroCelula(hitAll.point.x);
       const centroZ = snapCentroCelula(hitAll.point.z);
@@ -156,7 +152,6 @@ canvas.addEventListener('pointerdown', e => {
          showAviso("🎨 Piso aplicado na área inteira!");
       }
     } 
-    // PINTAR APENAS UM LADO (CLIQUE SIMPLES)
     else {
       if (isParede || isPilar) {
         const targetObject = hitAll.object;
@@ -433,9 +428,9 @@ function encontrarAreaFechada(xInicial, zInicial) {
   const pilha = [{ x: xInicial, z: zInicial }];
   const celulas = [];
   
-  // Limites dinâmicos calculados com base no tamanho oficial do seu mapa
-  const limiteX = configMapa.larguraChao / 2;
-  const limiteZ = (configMapa.larguraChao * 9 / 16) / 2;
+  // LÊ DINAMICAMENTE O TAMANHO DO MAPA ESCOLHIDO PELO MESTRE
+  const limiteX = configMapa.largura / 2;
+  const limiteZ = configMapa.profundidade / 2;
   
   while (pilha.length && celulas.length < 50000) {
     const atual = pilha.pop();
@@ -444,8 +439,8 @@ function encontrarAreaFechada(xInicial, zInicial) {
     if (visitados.has(chave)) continue;
     visitados.add(chave);
     
-    // Se o balde de tinta encostar na borda oficial do mapa, ele não pinta o "infinito"
-    if (atual.x < -limiteX || atual.x > limiteX || atual.z < -limiteZ || atual.z > limiteZ) continue; 
+    // BLOQUEIO PERFEITO: Para a tinta na borda do mapa
+    if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; 
     
     celulas.push(atual);
     
