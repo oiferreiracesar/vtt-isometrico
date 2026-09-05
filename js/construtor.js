@@ -100,7 +100,6 @@ canvas.addEventListener('pointerdown', e => {
   if (modoAtivo === 'porta') {
     const paredeAlvo = paredesConstruidas.find(p => p.mesh === hitAll.object);
     if (paredeAlvo) {
-      // Simulação rápida de porta mudando todas as faces para madeira
       const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 });
       hitAll.object.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta];
       paredeAlvo.isPorta = true;
@@ -122,7 +121,6 @@ canvas.addEventListener('pointerdown', e => {
       const { celulas } = encontrarAreaFechada(centroX, centroZ);
       
       if (isParede) {
-         // Pinta as paredes viradas PARA O CÔMODO
          celulas.forEach(c => {
            [['x',1],['x',-1],['z',1],['z',-1]].forEach(([eixo, dir]) => {
               const dx = eixo==='x' ? configMapa.tamanhoGrid * dir : 0;
@@ -130,7 +128,6 @@ canvas.addEventListener('pointerdown', e => {
               const p = paredeQueBloqueia(c.x, c.z, c.x + dx, c.z + dz);
               
               if (p && !p.isPorta) {
-                 // Identifica matematicamente qual lado (0 ou 1) está virado pro chão do cômodo
                  const normalFace0 = new THREE.Vector3(1, 0, 0).applyQuaternion(p.mesh.quaternion);
                  const dirParaCelula = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z);
                  const faceInterna = normalFace0.dot(dirParaCelula) > 0 ? 0 : 1;
@@ -150,7 +147,6 @@ canvas.addEventListener('pointerdown', e => {
       if (isParede) {
         const parede = paredesConstruidas.find(p => p.mesh === hitAll.object);
         if(!parede.isPorta) {
-           // Descobre qual lado o usuário clicou (0 = Lado Direito, 1 = Lado Esquerdo)
            const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
            if (faceClicada === 0 || faceClicada === 1) { 
               aplicarMaterialNaFace(hitAll.object, faceClicada, item);
@@ -170,7 +166,6 @@ canvas.addEventListener('pointermove', e => {
   if (hit) {
     const px = snapGrid(hit.point.x), pz = snapGrid(hit.point.z);
     
-    // Cursor muda pra vermelho se segurar Ctrl
     cursor3D.material = e.ctrlKey ? materialMarreta : materialCursor;
     cursor3D.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1);
     
@@ -185,7 +180,8 @@ canvas.addEventListener('pointermove', e => {
       if (modoAtivo === 'parede') {
         const dx = px - pontoA.x, dz = pz - pontoA.z;
         const comp = Math.sqrt(dx*dx + dz*dz) || 0.01;
-        previaMesh.scale.set(0.25, obterAltura(), comp + 0.25);
+        // Ajuste fino de 0.248 para evitar o Z-Fighting visual
+        previaMesh.scale.set(0.25, obterAltura(), comp + 0.248);
         previaMesh.position.set((pontoA.x + px)/2, obterAltura()/2, (pontoA.z + pz)/2);
         previaMesh.rotation.y = Math.atan2(dx, dz);
         previaMesh.visible = true;
@@ -208,7 +204,7 @@ window.addEventListener('pointerup', e => {
     if (hit) {
       const px = snapGrid(hit.point.x), pz = snapGrid(hit.point.z);
       if (Math.abs(px - pontoA.x) > 0.1 || Math.abs(pz - pontoA.z) > 0.1) {
-        if (modoAtivo === 'parede') criarSegmentoParede(pontoA.x, pontoA.z, px, pz, obterAltura(), 0.25);
+        if (modoAtivo === 'parede') criarSegmentoParede(pontoA.x, pontoA.z, px, pz, obterAltura(), 0.248);
         else if (modoAtivo === 'retangulo') criarRetangulo(pontoA.x, pontoA.z, px, pz, obterAltura());
         else if (modoAtivo === 'triangulo') criarTriangulo(pontoA.x, pontoA.z, px, pz, obterAltura());
         else if (modoAtivo === 'octogono') criarOctogono(pontoA.x, pontoA.z, px, pz, obterAltura());
@@ -221,23 +217,20 @@ window.addEventListener('pointerup', e => {
 });
 
 // ----------------------------------------------------
-// FUNÇÕES DE CRIAÇÃO GEOMÉTRICA (COM 6 LADOS)
+// FUNÇÕES DE CRIAÇÃO GEOMÉTRICA (COM AJUSTE DE Z-FIGHTING)
 // ----------------------------------------------------
-function criarSegmentoParede(ax, az, bx, bz, altura, ajusteQuina = 0.25) {
+function criarSegmentoParede(ax, az, bx, bz, altura, ajusteQuina = 0.248) {
   const dx = bx - ax, dz = bz - az;
   const comp = Math.sqrt(dx*dx + dz*dz);
   if (comp < 0.05) return;
   
-  // A parede agora é um array de 6 materiais (um para cada lado)
   const materiais = [
-    materialParede.clone(), // 0: Lado Direito
-    materialParede.clone(), // 1: Lado Esquerdo
-    materialParede.clone(), // 2: Cima
-    materialParede.clone(), // 3: Baixo
-    materialParede.clone(), // 4: Frente
-    materialParede.clone()  // 5: Trás
+    materialParede.clone(), materialParede.clone(), 
+    materialParede.clone(), materialParede.clone(), 
+    materialParede.clone(), materialParede.clone()
   ];
 
+  // A parede recebe o ajuste matemático milimétrico para esconder a emenda
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, comp + ajusteQuina), materiais);
   mesh.position.set((ax+bx)/2, altura/2, (az+bz)/2);
   mesh.rotation.y = Math.atan2(dx, dz);
@@ -245,7 +238,7 @@ function criarSegmentoParede(ax, az, bx, bz, altura, ajusteQuina = 0.25) {
   paredesConstruidas.push({ mesh, ax, az, bx, bz, altura, isPorta: false });
 }
 
-function criarPoligonoDeParedes(vertices, altura, ajusteQuina = 0.25) {
+function criarPoligonoDeParedes(vertices, altura, ajusteQuina = 0.248) {
   for (let i = 0; i < vertices.length; i++) {
     criarSegmentoParede(vertices[i].x, vertices[i].z, vertices[(i + 1) % vertices.length].x, vertices[(i + 1) % vertices.length].z, altura, ajusteQuina);
   }
@@ -253,12 +246,13 @@ function criarPoligonoDeParedes(vertices, altura, ajusteQuina = 0.25) {
 
 function criarRetangulo(x1, z1, x2, z2, altura) {
   const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
-  criarPoligonoDeParedes([{ x: minX, z: minZ }, { x: maxX, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura, 0.25);
+  criarPoligonoDeParedes([{ x: minX, z: minZ }, { x: maxX, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura, 0.248);
 }
 
 function criarTriangulo(x1, z1, x2, z2, altura) {
   const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
-  criarPoligonoDeParedes([{ x: (minX + maxX) / 2, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura, 0.10);
+  // Triângulos precisam de um recuo um pouco maior por causa da angulação aguda
+  criarPoligonoDeParedes([{ x: (minX + maxX) / 2, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura, 0.098);
 }
 
 function criarOctogono(x1, z1, x2, z2, altura) {
@@ -267,7 +261,7 @@ function criarOctogono(x1, z1, x2, z2, altura) {
   criarPoligonoDeParedes([
     { x: minX + offX, z: minZ }, { x: maxX - offX, z: minZ }, { x: maxX, z: minZ + offZ }, { x: maxX, z: maxZ - offZ },
     { x: maxX - offX, z: maxZ }, { x: minX + offX, z: maxZ }, { x: minX, z: maxZ - offZ }, { x: minX, z: minZ + offZ }
-  ], altura, 0.10);
+  ], altura, 0.098);
 }
 
 // ----------------------------------------------------
@@ -290,7 +284,6 @@ function gerarMaterialPintura(item) {
 
 function aplicarMaterialNaFace(mesh, faceIndex, item) {
   const mat = gerarMaterialPintura(item);
-  // Atualiza estritamente a face clicada (0 ou 1), preservando as outras
   const novosMateriais = [...mesh.material]; 
   novosMateriais[faceIndex] = mat;
   mesh.material = novosMateriais;
@@ -299,7 +292,8 @@ function aplicarMaterialNaFace(mesh, faceIndex, item) {
 function aplicarPiso(x, z, item) {
   let tile = pisosConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01);
   if (!tile) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid * 1.01, 0.12, configMapa.tamanhoGrid * 1.01), materialPiso.clone());
+    // O piso agora tem EXATAMENTE o tamanho do grid, sem sobreposição, eliminando o z-fighting no chão
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, 0.12, configMapa.tamanhoGrid), materialPiso.clone());
     mesh.position.set(x, 0.06, z);
     scene.add(mesh);
     tile = { mesh, x, z };
