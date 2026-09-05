@@ -40,8 +40,6 @@
     <div id="sims-panel" class="glass-panel">
       <!-- ABA 1: CONSTRUÇÃO -->
       <div id="panel-construcao" class="sub-panel active">
-        
-        <!-- Ferramentas Estruturais -->
         <div class="tool-group">
           <button class="tool-btn" id="btnModoParede" title="Parede (Arraste para criar. Segure Ctrl para Marreta)">🧱</button>
           <button class="tool-btn" id="btnModoRetangulo" title="Sala Retangular (Arraste)">⬜</button>
@@ -52,7 +50,6 @@
           <button class="tool-btn ativo" id="btnSairModo" title="Navegar / Sair">🖐️</button>
         </div>
         
-        <!-- Ferramentas The Sims (Paisagismo e Andares) -->
         <div class="tool-group" style="margin-top: 8px;">
           <button class="tool-btn" id="btnModoTelhado" title="Telhados (Em breve)" style="opacity: 0.5;">🏠</button>
           <button class="tool-btn" id="btnModoEscada" title="Escadas (Em breve)" style="opacity: 0.5;">🪜</button>
@@ -61,15 +58,12 @@
         </div>
         
         <div class="divider"></div>
-        
         <div class="tool-group small-inputs">
           <div class="campoSims">Altura <input type="number" id="inputAlturaParede" value="3" min="0.5" max="10" step="0.5"></div>
           <div class="campoSims">Grid <input type="number" id="inputTamanhoGrid" value="1" min="0.25" max="4" step="0.25"></div>
         </div>
-        
         <div class="divider"></div>
         
-        <!-- Paleta de Materiais -->
         <div id="paletaSecao">
           <div id="paletaBotoes">
             <button id="btnAdicionarTextura" title="Subir Imagem">🖼️</button>
@@ -81,8 +75,29 @@
         </div>
       </div>
 
-      <!-- Outras abas (Inativas por enquanto) -->
-      <div id="panel-tabuleiro" class="sub-panel"></div>
+      <!-- ABA 2: TABULEIRO -->
+      <div id="panel-tabuleiro" class="sub-panel">
+        <div class="hud-section">
+          <h3>Tamanho do Tabuleiro</h3>
+          <div class="linhaFerr">
+            <span>Colunas (Eixo X)</span>
+            <input type="number" id="inputMapaX" value="32" min="10" max="200" step="1">
+          </div>
+          <div class="linhaFerr">
+            <span>Linhas (Eixo Z)</span>
+            <input type="number" id="inputMapaZ" value="18" min="10" max="200" step="1">
+          </div>
+          <button class="wide" id="btnRedimensionarMapa" style="margin-top: 10px; border-color: #38bdf8; background: rgba(56,189,248,0.2); color: #38bdf8;">
+            📐 Aplicar Novo Tamanho
+          </button>
+        </div>
+        <div class="divider"></div>
+        <div class="hud-section" style="justify-content: center;">
+          <span class="hint-text">Aviso:<br>Reduzir muito o mapa<br>pode deixar construções<br>flutuando para fora.</span>
+        </div>
+      </div>
+
+      <!-- Outras abas -->
       <div id="panel-imersao" class="sub-panel"></div>
       <div id="panel-grimorio" class="sub-panel"></div>
     </div>
