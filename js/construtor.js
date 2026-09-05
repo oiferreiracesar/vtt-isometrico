@@ -368,14 +368,13 @@ function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) {
 function aplicarMaterialNaFace(mesh, faceIndex, item) {
   let repeatX = 1, repeatY = 1;
   
-  // Escala Dinâmica: A textura se adapta perfeitamente ao tamanho físico do bloco!
   if (mesh.geometry && mesh.geometry.parameters) {
       const { width, height, depth } = mesh.geometry.parameters;
-      if (faceIndex === 0 || faceIndex === 1) { // Faces Laterais da Parede (Profundidade x Altura)
+      if (faceIndex === 0 || faceIndex === 1) { 
           repeatX = depth; repeatY = height;
-      } else if (faceIndex === 2 || faceIndex === 3) { // Topo e Base (Largura x Profundidade)
+      } else if (faceIndex === 2 || faceIndex === 3) { 
           repeatX = width; repeatY = depth;
-      } else if (faceIndex === 4 || faceIndex === 5) { // Quinas/Pontas da Parede (Largura x Altura)
+      } else if (faceIndex === 4 || faceIndex === 5) { 
           repeatX = width; repeatY = height;
       }
   }
@@ -409,12 +408,11 @@ function aplicarPiso(x, z, item) {
     tile = { mesh, x, z };
     pisosConstruidos.push(tile);
   }
-  // Aplica a textura no piso escalando perfeitamente pelo tamanho da grade
   tile.mesh.material = gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid);
 }
 
 // ----------------------------------------------------
-// ALGORITMO DE FLOOD FILL (AGORA EXPANDIDO)
+// ALGORITMO DE FLOOD FILL (LIMITADO AO TABULEIRO)
 // ----------------------------------------------------
 function distanciaPontoSegmento(px, pz, ax, az, bx, bz) {
   const compSq = (bx-ax)**2 + (bz-az)**2;
@@ -435,7 +433,10 @@ function encontrarAreaFechada(xInicial, zInicial) {
   const pilha = [{ x: xInicial, z: zInicial }];
   const celulas = [];
   
-  // AUMENTADO para 50.000 para permitir pintar áreas imensas
+  // Limites dinâmicos calculados com base no tamanho oficial do seu mapa
+  const limiteX = configMapa.larguraChao / 2;
+  const limiteZ = (configMapa.larguraChao * 9 / 16) / 2;
+  
   while (pilha.length && celulas.length < 50000) {
     const atual = pilha.pop();
     const chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`;
@@ -443,8 +444,8 @@ function encontrarAreaFechada(xInicial, zInicial) {
     if (visitados.has(chave)) continue;
     visitados.add(chave);
     
-    // Limite de segurança do mapa expandido para 100
-    if (Math.abs(atual.x) > 100 || Math.abs(atual.z) > 100) continue; 
+    // Se o balde de tinta encostar na borda oficial do mapa, ele não pinta o "infinito"
+    if (atual.x < -limiteX || atual.x > limiteX || atual.z < -limiteZ || atual.z > limiteZ) continue; 
     
     celulas.push(atual);
     
