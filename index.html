@@ -8,45 +8,29 @@
 <body>
   <canvas id="canvas3d"></canvas>
 
-  <!-- Painéis Superiores (Ocultos por padrão no CSS ou manipulados depois) -->
-  <div id="painelSecundario">
-    <button id="btnColapsarSecundario" title="Ferramentas extras">☰</button>
-    <div id="conteudoSecundario" class="glass-panel">
-      <h3>Gerenciar Mapa</h3>
-      <button class="wide" id="btnSalvarMapa">💾 Salvar Mapa no PC</button>
-      <button class="wide" id="btnCarregarMapa">📂 Carregar Mapa</button>
-      <input type="file" id="inputCarregarMapa" accept=".json" style="display: none;">
-
-      <h3>Chão de referência</h3>
-      <button class="wide" id="btnEscolherImagemChao">🖼️ Importar imagem do mapa 2D</button>
-      <input type="file" id="inputImagemChao" accept="image/*" style="display: none;">
-      <div class="linhaFerr"><span>Opacidade</span><input type="range" id="opacidadeChao" min="20" max="100" value="80"></div>
-      <div class="linhaFerr"><span>Largura (16:9)</span><input type="number" id="inputLarguraChao" value="32" min="8" max="80" step="1"></div>
-
-      <h3>NPCs e Tokens</h3>
-      <button class="wide" id="btnEscolherNpcs">📂 Escolher 03-npcs.json</button>
-      <input type="file" id="inputNpcs" accept="application/json,.json" style="display: none;">
-      <div id="listaNpcs"></div>
-
-      <h3>Tela do Jogador</h3>
-      <button class="wide" id="btnAbrirTelaJogador">🖥️ Abrir Tela do Jogador</button>
-    </div>
-  </div>
-
-  <div class="painel glass-panel" id="painelDireita">
-    <h2>⚔️ Ordem da Rodada</h2>
-    <div class="row" style="display:flex; gap:6px; margin-bottom:12px;">
-      <input type="text" id="inputNomeCombatente" placeholder="Nome do combatente" style="flex:1;">
-      <button id="btnAddCombatente" style="padding: 6px 12px;">+</button>
-    </div>
-    <button class="wide" id="btnNovaRodada" style="background: rgba(34, 197, 94, 0.2); border-color: #22c55e; color: #4ade80;">🔀 Nova Rodada</button>
-    <div id="listaIniciativa" style="margin-top:10px;"></div>
-  </div>
-
   <div id="hint">Navegação isométrica: Botão do Meio (arrastar) ou Scroll (zoom)</div>
   <div id="fpsbadge"></div>
 
-  <!-- HUD Estilo The Sims -->
+  <!-- HUD Câmera The Sims (Canto Inferior Direito) -->
+  <div id="sims-camera-controls" class="glass-panel">
+    <div class="cam-row">
+      <button class="cam-btn" id="camRotLeft" title="Girar Esquerda">↶</button>
+      <button class="cam-btn" id="camUp" title="Subir Andar">▲</button>
+      <button class="cam-btn" id="camRotRight" title="Girar Direita">↷</button>
+    </div>
+    <div class="cam-row">
+      <button class="cam-btn" id="camZoomOut" title="Afastar (-)">➖</button>
+      <button class="cam-btn" id="camDown" title="Descer Andar">▼</button>
+      <button class="cam-btn" id="camZoomIn" title="Aproximar (+)">➕</button>
+    </div>
+    <div class="cam-row walls">
+      <button class="cam-btn ativo" id="camWallFull" title="Paredes Erguidas">🧱</button>
+      <button class="cam-btn" id="camWallCut" title="Paredes Transparentes">🪟</button>
+      <button class="cam-btn" id="camWallLow" title="Paredes Rebaixadas">🕳️</button>
+    </div>
+  </div>
+
+  <!-- HUD Principal The Sims (Canto Inferior Esquerdo) -->
   <div id="sims-hud">
     <div id="sims-node">
       <button class="node-btn active" data-target="panel-construcao" title="Construção">🏗️</button>
@@ -58,44 +42,39 @@
     <div id="sims-panel" class="glass-panel">
       <!-- ABA 1: CONSTRUÇÃO -->
       <div id="panel-construcao" class="sub-panel active">
-  <div class="tool-group">
-    <button class="tool-btn" id="btnModoParede" title="Modo Parede">🧱</button>
-    <button class="tool-btn" id="btnModoRetangulo" title="Modo Retângulo">⬜</button>
-    <button class="tool-btn" id="btnModoTriangulo" title="Modo Triângulo">🔺</button>
-    <button class="tool-btn" id="btnModoOctogono" title="Modo Octógono">🛑</button>
-    <button class="tool-btn" id="btnModoChao" title="Modo Chão (Piso)">⬛</button>
-    <button class="tool-btn" id="btnModoPorta" title="Marcar Porta">🚪</button>
-    <button class="tool-btn ativo" id="btnSairModo" title="Navegar / Sair">🖐️</button>
-  </div>
-  
-  <div class="divider"></div>
-  
-  <div class="tool-group">
-    <button class="tool-btn" id="btnDesfazerUltimo" title="Desfazer">↩️</button>
-    <button class="tool-btn" id="btnPintarParede" title="Pintar Parede">🖌️</button>
-    <button class="tool-btn" id="btnPintarPiso" title="Pintar Piso">🪣</button>
-  </div>
+        <div class="tool-group">
+          <button class="tool-btn" id="btnModoParede" title="Modo Parede">🧱</button>
+          <button class="tool-btn" id="btnModoRetangulo" title="Modo Retângulo">⬜</button>
+          <button class="tool-btn" id="btnModoTriangulo" title="Modo Triângulo">🔺</button>
+          <button class="tool-btn" id="btnModoOctogono" title="Modo Octógono">🛑</button>
+          <button class="tool-btn" id="btnModoChao" title="Modo Chão (Piso)">⬛</button>
+          <button class="tool-btn" id="btnModoPorta" title="Marcar Porta">🚪</button>
+          <button class="tool-btn ativo" id="btnSairModo" title="Navegar / Sair">🖐️</button>
+        </div>
+        <div class="divider"></div>
+        <div class="tool-group">
+          <button class="tool-btn" id="btnDesfazerUltimo" title="Desfazer">↩️</button>
+          <button class="tool-btn" id="btnPintarParede" title="Pintar Parede">🖌️</button>
+          <button class="tool-btn" id="btnPintarPiso" title="Pintar Piso">🪣</button>
+        </div>
+        <div class="divider"></div>
+        <div class="tool-group small-inputs">
+          <div class="campoSims">Altura <input type="number" id="inputAlturaParede" value="3" min="0.5" max="10" step="0.5"></div>
+          <div class="campoSims">Grid <input type="number" id="inputTamanhoGrid" value="1" min="0.25" max="4" step="0.25"></div>
+        </div>
+        <div class="divider"></div>
+        <div id="paletaSecao">
+          <div id="paletaBotoes">
+            <button id="btnAdicionarTextura">🖼️</button>
+            <input type="file" id="inputAdicionarTextura" accept="image/*" multiple style="display: none;">
+            <input type="color" id="inputCorNova" value="#38bdf8">
+            <button id="btnAdicionarCor">➕</button>
+          </div>
+          <div id="paletaTexturasWrap"><div id="paletaTexturas"></div></div>
+        </div>
+      </div>
 
-  <div class="divider"></div>
-
-  <div class="tool-group small-inputs">
-    <div class="campoSims">Altura <input type="number" id="inputAlturaParede" value="3" min="0.5" max="10" step="0.5"></div>
-    <div class="campoSims">Grid <input type="number" id="inputTamanhoGrid" value="1" min="0.25" max="4" step="0.25"></div>
-  </div>
-
-  <div class="divider"></div>
-
-  <div id="paletaSecao">
-    <div id="paletaBotoes">
-      <button id="btnAdicionarTextura">🖼️</button>
-      <input type="file" id="inputAdicionarTextura" accept="image/*" multiple style="display: none;">
-      <input type="color" id="inputCorNova" value="#38bdf8">
-      <button id="btnAdicionarCor">➕</button>
-    </div>
-    <div id="paletaTexturasWrap"><div id="paletaTexturas"></div></div>
-  </div>
-</div>
-      <!-- As outras abas continuam no HTML mas estão inativas no momento para focar no core 3D -->
+      <!-- Outras abas (inativas no html, ativadas sob demanda) -->
       <div id="panel-tabuleiro" class="sub-panel"></div>
       <div id="panel-imersao" class="sub-panel"></div>
       <div id="panel-grimorio" class="sub-panel"></div>
@@ -103,7 +82,6 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
-  <!-- NOTE O TYPE="MODULE" AQUI -->
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
