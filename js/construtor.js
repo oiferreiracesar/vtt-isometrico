@@ -1,10 +1,10 @@
-// js/construtor.js - Múltiplos Andares, Cômodos e SISTEMA DE HISTÓRICO (Undo/Redo BLINDADO)
+// js/construtor.js - Múltiplos Andares, Cômodos e HISTÓRICO (Blindado contra Bugs)
 import { scene, camera, canvas, configsCamera } from './engine.js';
 import { configMapa, meshChaoBase } from './mapa.js';
 import { showAviso, itemSelecionadoAtual } from './ui.js';
 
 export let modoAtivo = null;
-let modoVisaoAtual = 'full';
+export let modoVisaoAtual = 'full'; // Variável EXPORTADA para nunca mais dar erro de sintaxe!
 
 export const comodosConstruidos = []; 
 export const paredesConstruidas = [];
@@ -69,7 +69,7 @@ export function desfazer() {
         historicoRedo.push(acao);
         atualizarVisibilidadeAndares();
         showAviso("Desfazer (Undo)");
-    } catch(e) { console.error("Erro ao desfazer (ignorado para não travar):", e); }
+    } catch(e) { console.error("Erro ao desfazer (ignorado):", e); }
 }
 
 export function refazer() {
@@ -105,7 +105,7 @@ export function refazer() {
         historicoUndo.push(acao);
         atualizarVisibilidadeAndares();
         showAviso("Refazer (Redo)");
-    } catch(e) { console.error("Erro ao refazer (ignorado para não travar):", e); }
+    } catch(e) { console.error("Erro ao refazer (ignorado):", e); }
 }
 
 window.addEventListener('keydown', e => {
@@ -174,7 +174,8 @@ function raycastObjetosDoNivel(clientX, clientY) {
   const escadasF = []; escadasConstruidas.forEach(e => { if (e.nivel === configsCamera.nivel) escadasF.push(...e.mesh.children); });
   
   const objetosNivel = [...paredesF, ...pilaresF, ...pisosF, ...colunasF, ...escadasF];
-  if (configsCamera.nivel === 0) objetosNivel.push(meshChaoBase);
+  if (configsCamera.nivel === 0 && meshChaoBase) objetosNivel.push(meshChaoBase);
+
   const hits = raycaster.intersectObjects(objetosNivel, true);
   return hits.length ? hits[0] : null;
 }
@@ -185,6 +186,7 @@ function removerObjetoMundo(tipo, obj, arrayBase) {
     scene.remove(obj.mesh);
     const idx = arrayBase.indexOf(obj);
     if (idx > -1) arrayBase.splice(idx, 1);
+
     if (obj.comodoId) {
         const c = comodosConstruidos.find(x => x.id === obj.comodoId);
         if (c) {

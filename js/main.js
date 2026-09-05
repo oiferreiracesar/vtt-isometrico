@@ -1,23 +1,15 @@
-// main.js - Ponto de entrada da aplicação modular
-import { scene, camera, renderer, canvas } from './engine.js';
+// js/main.js - O Ponto de Partida (Motor Principal)
+import { scene, camera, renderer } from './engine.js';
 import { iniciarMapa } from './mapa.js';
-import { iniciarControles } from './controles.js';
 import { iniciarUI } from './ui.js';
-import './construtor.js'; // Apenas importa para ativar os listeners de mouse
 
-// Inicia chão e grid
+// Inicia as fundações
 iniciarMapa();
-
-// Inicia botões e abas HTML
 iniciarUI();
 
-// Inicia câmera isométrica e movimentação (Pan/Zoom/WASD)
-const atualizarTeclado = iniciarControles(canvas);
-
-// Loop principal de renderização
+// O Loop infinito que mantém o tabuleiro vivo na tela (60 FPS)
 function animar() {
-  requestAnimationFrame(animar);
-  atualizarTeclado();
-  renderer.render(scene, camera);
+    requestAnimationFrame(animar);
+    renderer.render(scene, camera);
 }
 animar();

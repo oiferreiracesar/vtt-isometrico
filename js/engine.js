@@ -1,7 +1,7 @@
 // js/engine.js - Configuração Core do 3D e Câmera Isométrica
 export const canvas = document.getElementById('canvas3d');
 
-// BLINDAGEM ELEGANTE: Bloqueia o menu do Mac sem matar os cliques do jogo!
+// BLINDAGEM ELEGANTE: Impede o menu do Mac de aparecer, mas sem desligar o clique do jogo!
 window.addEventListener('contextmenu', e => { e.preventDefault(); }, { capture: true });
 
 export const scene = new THREE.Scene();
