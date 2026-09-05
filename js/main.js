@@ -1,18 +1,23 @@
 // main.js - Ponto de entrada da aplicação
-import { scene, camera, renderer } from './engine.js';
+import { scene, camera, renderer, canvas } from './engine.js';
+import { iniciarMapa } from './mapa.js';
+import { iniciarControles } from './controles.js';
 
-// Um GridHelper provisório apenas para você ver o chão isométrico na tela
-const gridTemporario = new THREE.GridHelper(32, 32, 0x38bdf8, 0x4a4030);
-scene.add(gridTemporario);
+// Inicia o chão escuro com a grade
+iniciarMapa();
 
-// Loop de renderização
+// Inicia o pan/zoom isométrico e guarda a função do teclado
+const atualizarTeclado = iniciarControles(canvas);
+
+// Loop de renderização principal
 function animar() {
   requestAnimationFrame(animar);
+  atualizarTeclado(); // Processa WASD continuamente
   renderer.render(scene, camera);
 }
 animar();
 
-// Controle temporário das abas HTML (apenas visual)
+// Controle provisório das abas do HUD
 document.querySelectorAll('.node-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active'));
