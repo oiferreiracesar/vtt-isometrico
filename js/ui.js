@@ -1,5 +1,5 @@
 // js/ui.js - Gerenciamento da Interface HTML e Paleta
-import { setModoAtivo, mudarVisaoParedes } from './construtor.js';
+import { setModoAtivo, atualizarVisibilidadeAndares, modoVisaoAtual } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
 
@@ -88,16 +88,21 @@ export function iniciarUI() {
     });
   });
 
-  document.getElementById('btnModoParede').addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste. (Ctrl = Marreta)'));
-  document.getElementById('btnModoCerca').addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem bloquear pintura ou luz.'));
+  document.getElementById('btnModoParede').addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
+  document.getElementById('btnModoCerca').addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
   document.getElementById('btnModoRetangulo').addEventListener('click', () => ativarFerramenta('btnModoRetangulo', 'retangulo', 'Sala Retangular: Clique e arraste.'));
   document.getElementById('btnModoTriangulo').addEventListener('click', () => ativarFerramenta('btnModoTriangulo', 'triangulo', 'Sala Triangular: Clique e arraste.'));
   document.getElementById('btnModoOctogono').addEventListener('click', () => ativarFerramenta('btnModoOctogono', 'octogono', 'Sala Octogonal: Clique e arraste.'));
   document.getElementById('btnModoPorta').addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
   document.getElementById('btnModoPintura').addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo)'));
+  
+  // NOVAS FERRAMENTAS
+  document.getElementById('btnModoEscada').addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada: Arraste para o sentido que ela sobe.'));
+  document.getElementById('btnModoColuna').addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Clique no chão para sustentar varandas.'));
+  
   document.getElementById('btnSairModo').addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Modo de Navegação livre.'));
 
-  const botoesFuturos = ['btnModoTelhado', 'btnModoEscada', 'btnModoTerreno', 'btnModoAgua'];
+  const botoesFuturos = ['btnModoTelhado', 'btnModoTerreno'];
   botoesFuturos.forEach(id => { document.getElementById(id).addEventListener('click', () => showAviso("Em breve!")); });
 
   document.getElementById('btnRedimensionarMapa').addEventListener('click', () => {
@@ -105,14 +110,25 @@ export function iniciarUI() {
     redimensionarMapa(w, d); showAviso(`Tabuleiro redimensionado para ${w}x${d}.`);
   });
 
+  // SISTEMA DE CÂMERA E ANDARES
   document.getElementById('camZoomIn').addEventListener('click', () => { configsCamera.zoom = Math.min(8, configsCamera.zoom + 0.5); atualizarCamera(); });
   document.getElementById('camZoomOut').addEventListener('click', () => { configsCamera.zoom = Math.max(0.2, configsCamera.zoom - 0.5); atualizarCamera(); });
   document.getElementById('camRotLeft').addEventListener('click', () => { configsCamera.angulo -= Math.PI / 2; atualizarCamera(); });
   document.getElementById('camRotRight').addEventListener('click', () => { configsCamera.angulo += Math.PI / 2; atualizarCamera(); });
+  
+  // Subir / Descer Andares
+  document.getElementById('camUp').addEventListener('click', () => { 
+      configsCamera.nivel += 1; atualizarCamera(); atualizarVisibilidadeAndares();
+      showAviso(`Subiu para o Nível ${configsCamera.nivel}.`);
+  });
+  document.getElementById('camDown').addEventListener('click', () => { 
+      configsCamera.nivel = Math.max(0, configsCamera.nivel - 1); atualizarCamera(); atualizarVisibilidadeAndares();
+      showAviso(configsCamera.nivel === 0 ? `Desceu para o Térreo.` : `Desceu para o Nível ${configsCamera.nivel}.`);
+  });
 
   const btnWallFull = document.getElementById('camWallFull'), btnWallCut = document.getElementById('camWallCut'), btnWallLow = document.getElementById('camWallLow');
   function clearWallActive() { [btnWallFull, btnWallCut, btnWallLow].forEach(b => b.classList.remove('ativo')); }
-  btnWallFull.addEventListener('click', () => { clearWallActive(); btnWallFull.classList.add('ativo'); mudarVisaoParedes('full'); });
-  btnWallCut.addEventListener('click', () => { clearWallActive(); btnWallCut.classList.add('ativo'); mudarVisaoParedes('cut'); });
-  btnWallLow.addEventListener('click', () => { clearWallActive(); btnWallLow.classList.add('ativo'); mudarVisaoParedes('low'); });
+  btnWallFull.addEventListener('click', () => { clearWallActive(); btnWallFull.classList.add('ativo'); atualizarVisibilidadeAndares('full'); });
+  btnWallCut.addEventListener('click', () => { clearWallActive(); btnWallCut.classList.add('ativo'); atualizarVisibilidadeAndares('cut'); });
+  btnWallLow.addEventListener('click', () => { clearWallActive(); btnWallLow.classList.add('ativo'); atualizarVisibilidadeAndares('low'); });
 }
