@@ -1,4 +1,4 @@
-// js/construtor.js - Múltiplos Andares, Cômodos, GIZMO E HISTÓRICO BLINDADO
+// js/construtor.js - Múltiplos Andares, Gizmo e PINTURA CIRÚRGICA
 import { scene, camera, canvas, configsCamera } from './engine.js';
 import { configMapa, meshChaoBase } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo } from './ui.js';
@@ -191,24 +191,8 @@ function raycastObjetosDoNivel(clientX, clientY) {
   return hits.length ? hits[0] : null;
 }
 
-function removerObjetoMundo(tipo, obj, arrayBase) {
-    if (!obj) return;
-    registrarRemocao(tipo, obj, arrayBase);
-    scene.remove(obj.mesh);
-    const idx = arrayBase.indexOf(obj);
-    if (idx > -1) arrayBase.splice(idx, 1);
-
-    if (obj.comodoId) {
-        const c = comodosConstruidos.find(x => x.id === obj.comodoId);
-        if (c) {
-            if (tipo === 'parede') c.paredes = c.paredes.filter(x => x !== obj);
-            if (tipo === 'pilar') c.pilares = c.pilares.filter(x => x !== obj);
-        }
-    }
-}
-
 // ----------------------------------------------------
-// A LÓGICA DO GIZMO DO THE SIMS (SELEÇÃO INTELIGENTE) E SETAS DE ESTICAR
+// A LÓGICA DO GIZMO E DAS SETAS DE ESTICAR
 // ----------------------------------------------------
 export function setModoAtivo(modo) {
   modoAtivo = modo;
@@ -340,7 +324,6 @@ canvas?.addEventListener('pointerdown', e => {
   // O CLIQUE INTELIGENTE DO MODO NAVEGAR (ModoAtivo === null) E SETAS DE ESTICAR
   if (!modoAtivo && e.button === 0 && !e.altKey && !e.ctrlKey && !e.shiftKey) {
       
-      // Checa se clicou nas setas de esticar primeiro
       if (grupoSetas.visible) {
           raycaster.setFromCamera(mouseNdc, camera);
           const hitsSetas = raycaster.intersectObjects(grupoSetas.children);
@@ -361,7 +344,6 @@ canvas?.addEventListener('pointerdown', e => {
           }
       }
 
-      // Senão checa se clicou numa parede pra selecionar
       const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
       if (hitAll && hitAll.object !== meshChaoBase) {
           const objClicado = paredesConstruidas.find(p => p.mesh === hitAll.object) || pilaresConstruidos.find(p => p.mesh === hitAll.object);
@@ -401,106 +383,90 @@ canvas?.addEventListener('pointerdown', e => {
      return;
   }
 
-  const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
-  if (!hitAll) return;
-
-  if (modoAtivo === 'porta') {
-    const paredeAlvo = paredesConstruidas.find(p => p.mesh === hitAll.object && p.nivel === configsCamera.nivel);
-    if (paredeAlvo && !paredeAlvo.isCerca) { 
-      registrarPintura(hitAll.object);
-      const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 });
-      hitAll.object.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta];
-      finalizarPintura(hitAll.object);
-      paredeAlvo.isPorta = true;
-      showAviso("🚪 Porta instalada!");
-    }
-    return;
-  }
-
+  // --- NOVA LÓGICA CIRÚRGICA DE PINTURA ---
   if (modoAtivo === 'pintura') {
-    const isRemocao = e.ctrlKey; 
-    const item = itemSelecionadoAtual();
-    if (!isRemocao && !item) return;
+      const isRemocao = e.ctrlKey; 
+      const item = itemSelecionadoAtual();
+      if (!isRemocao && !item) return;
 
-    const isEscada = escadasConstruidas.some(e => e.mesh === hitAll.object.parent);
-    if (isEscada) {
-        const escada = escadasConstruidas.find(e => e.mesh === hitAll.object.parent);
-        escada.mesh.children.forEach(step => { 
-            registrarPintura(step);
-            step.material = isRemocao ? materialPiso.clone() : gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid); 
-            finalizarPintura(step);
-        });
-        return;
-    }
+      const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
+      const chaoHit = raycastPlanoBase(e.clientX, e.clientY);
+      if (!hitAll && !chaoHit) return;
 
-    const isParede = paredesConstruidas.some(p => p.mesh === hitAll.object);
-    const isPilar = pilaresConstruidos.some(p => p.mesh === hitAll.object);
-    const isColuna = colunasSustentacao.some(p => p.mesh === hitAll.object);
-    
-    if (e.shiftKey) {
-      const centroX = snapCentroCelula(hitAll.point.x), centroZ = snapCentroCelula(hitAll.point.z);
-      const { celulas } = encontrarAreaFechada(centroX, centroZ);
-      if (isParede || isPilar) {
-         celulas.forEach(c => {
-           [['x',1],['x',-1],['z',1],['z',-1]].forEach(([eixo, dir]) => {
-              const dx = eixo==='x' ? configMapa.tamanhoGrid * dir : 0, dz = eixo==='z' ? configMapa.tamanhoGrid * dir : 0;
-              const p = paredeQueBloqueia(c.x, c.z, c.x + dx, c.z + dz);
-              if (p && !p.isPorta && !p.isCerca) { 
-                 const dirNorm = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z).normalize();
-                 if (isRemocao) {
-                     removerPinturaFacePorNormal(p.mesh, dirNorm, materialParede);
-                     if (p.pilarA) removerPinturaFacePorNormal(p.pilarA.mesh, dirNorm, materialParede);
-                     if (p.pilarB) removerPinturaFacePorNormal(p.pilarB.mesh, dirNorm, materialParede);
-                 } else {
-                     pintarFacePorNormalMundial(p.mesh, dirNorm, item);
-                     if (p.pilarA) pintarFacePorNormalMundial(p.pilarA.mesh, dirNorm, item);
-                     if (p.pilarB) pintarFacePorNormalMundial(p.pilarB.mesh, dirNorm, item);
-                 }
+      const targetObject = hitAll ? hitAll.object : null;
+      const clickPoint = hitAll ? hitAll.point : chaoHit.point;
+
+      const isEscada = targetObject && escadasConstruidas.some(e => e.mesh === targetObject.parent);
+      if (isEscada) {
+          const escada = escadasConstruidas.find(e => e.mesh === targetObject.parent);
+          escada.mesh.children.forEach(step => { 
+              registrarPintura(step);
+              step.material = isRemocao ? materialPiso.clone() : gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid); 
+              finalizarPintura(step);
+          });
+          return;
+      }
+
+      const isParede = targetObject && paredesConstruidas.some(p => p.mesh === targetObject);
+      const isPilar = targetObject && pilaresConstruidos.some(p => p.mesh === targetObject);
+      const isColuna = targetObject && colunasSustentacao.some(p => p.mesh === targetObject);
+
+      if (e.shiftKey) {
+          let startX = snapCentroCelula(clickPoint.x);
+          let startZ = snapCentroCelula(clickPoint.z);
+
+          // Puxa o balde ligeiramente pra dentro da face clicada pra não vazar
+          if (targetObject && (isParede || isPilar)) {
+              const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
+              const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
+              const worldNormal = localNormals[faceClicada].clone().applyQuaternion(targetObject.quaternion).normalize();
+              startX = snapCentroCelula(clickPoint.x + worldNormal.x * 0.1);
+              startZ = snapCentroCelula(clickPoint.z + worldNormal.z * 0.1);
+          }
+
+          const { celulas } = encontrarAreaFechada(startX, startZ);
+          if (targetObject && (isParede || isPilar)) {
+             celulas.forEach(c => {
+               [['x',1],['x',-1],['z',1],['z',-1]].forEach(([eixo, dir]) => {
+                  const dx = eixo==='x' ? configMapa.tamanhoGrid * dir : 0, dz = eixo==='z' ? configMapa.tamanhoGrid * dir : 0;
+                  const p = paredeQueBloqueia(c.x, c.z, c.x + dx, c.z + dz);
+                  if (p && !p.isPorta && !p.isCerca) { 
+                     const dirNorm = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z).normalize();
+                     if (isRemocao) {
+                         removerPinturaFacePorNormal(p.mesh, dirNorm, materialParede);
+                         if (p.pilarA) removerPinturaFacePorNormal(p.pilarA.mesh, dirNorm, materialParede);
+                         if (p.pilarB) removerPinturaFacePorNormal(p.pilarB.mesh, dirNorm, materialParede);
+                     } else {
+                         pintarFacePorNormalMundial(p.mesh, dirNorm, item);
+                         if (p.pilarA) pintarFacePorNormalMundial(p.pilarA.mesh, dirNorm, item);
+                         if (p.pilarB) pintarFacePorNormalMundial(p.pilarB.mesh, dirNorm, item);
+                     }
+                  }
+               });
+             });
+          } else { celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); }
+      } else {
+          // CLIQUE ÚNICO: Só pinta EXATAMENTE a parede clicada (não vaza pelas quinas)
+          if (targetObject && (isParede || isPilar || isColuna)) {
+              const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
+              const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
+              const worldNormal = localNormals[faceClicada].clone().applyQuaternion(targetObject.quaternion).normalize();
+              if (isRemocao) {
+                  removerPinturaFacePorNormal(targetObject, worldNormal, materialParede);
+              } else {
+                  pintarFacePorNormalMundial(targetObject, worldNormal, item);
               }
-           });
-         });
-      } else { celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); }
-    } else {
-      if (isParede || isPilar || isColuna) {
-        const targetObject = hitAll.object;
-        const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
-        const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
-        const worldNormal = localNormals[faceClicada].clone().applyQuaternion(targetObject.quaternion).normalize();
-        if (isRemocao) {
-            removerPinturaFacePorNormal(targetObject, worldNormal, materialParede);
-            if (isParede) {
-                const parede = paredesConstruidas.find(p => p.mesh === targetObject);
-                if(parede && !parede.isPorta) {
-                    if (parede.pilarA) removerPinturaFacePorNormal(parede.pilarA.mesh, worldNormal, materialParede);
-                    if (parede.pilarB) removerPinturaFacePorNormal(parede.pilarB.mesh, worldNormal, materialParede);
-                }
-            } else if (isPilar) {
-                const pilarObj = pilaresConstruidos.find(p => p.mesh === targetObject);
-                const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilarObj || p.pilarB === pilarObj);
-                attachedWalls.forEach(p => { if (!p.isPorta) removerPinturaFacePorNormal(p.mesh, worldNormal, materialParede); });
-            }
-        } else {
-            pintarFacePorNormalMundial(targetObject, worldNormal, item);
-            if (isParede) {
-                const parede = paredesConstruidas.find(p => p.mesh === targetObject);
-                if(parede && !parede.isPorta) {
-                    if (parede.pilarA) pintarFacePorNormalMundial(parede.pilarA.mesh, worldNormal, item);
-                    if (parede.pilarB) pintarFacePorNormalMundial(parede.pilarB.mesh, worldNormal, item);
-                }
-            } else if (isPilar) {
-                const pilarObj = pilaresConstruidos.find(p => p.mesh === targetObject);
-                const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilarObj || p.pilarB === pilarObj);
-                attachedWalls.forEach(p => { if (!p.isPorta) pintarFacePorNormalMundial(p.mesh, worldNormal, item); });
-            }
-        }
-      } else { if (isRemocao) removerPiso(snapCentroCelula(hitAll.point.x), snapCentroCelula(hitAll.point.z)); else aplicarPiso(snapCentroCelula(hitAll.point.x), snapCentroCelula(hitAll.point.z), item); }
-    }
+          } else { 
+              const cx = snapCentroCelula(clickPoint.x); const cz = snapCentroCelula(clickPoint.z);
+              if (isRemocao) removerPiso(cx, cz); else aplicarPiso(cx, cz, item); 
+          }
+      }
+      return; 
   }
 });
 
 canvas?.addEventListener('pointermove', e => {
-  // LÓGICA DE ESTICAR A SALA PELAS SETAS
-  if (arrastandoSeta && comodoSelecionado && !modoAtivo) {
+  if (!modoAtivo && arrastandoSeta && comodoSelecionado) {
         const hit = raycastPlanoBase(e.clientX, e.clientY);
         if (hit) {
             const px = snapGrid(hit.point.x);
@@ -547,7 +513,7 @@ canvas?.addEventListener('pointermove', e => {
         return;
   }
 
-  if (movendoComodo && comodoSelecionado && !modoAtivo) {
+  if (!modoAtivo && movendoComodo && comodoSelecionado) {
       const chaoHit = raycastPlanoBase(e.clientX, e.clientY);
       if (chaoHit) {
           const atualX = snapGrid(chaoHit.point.x), atualZ = snapGrid(chaoHit.point.z);
@@ -630,31 +596,21 @@ function aplicarMovimento(comodo, dx, dz) {
     comodo.pilares.forEach(p => { p.x += dx; p.z += dz; p.mesh.position.x += dx; p.mesh.position.z += dz; });
 }
 
-function executarMarreta(hitObject) {
-  if (!hitObject || hitObject === meshChaoBase) return;
-  const isPiso = pisosConstruidos.some(p => p.mesh === hitObject);
-  const isParedeMode = ['parede', 'cerca', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo);
-  if (isParedeMode && isPiso) return; 
-  
-  const parede = paredesConstruidas.find(p => p.mesh === hitObject);
-  if (parede) { removerObjetoMundo('parede', parede, paredesConstruidas); limparPilaresSoltos(); return; }
-  
-  const pilar = pilaresConstruidos.find(p => p.mesh === hitObject);
-  if (pilar) { const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilar || p.pilarB === pilar); attachedWalls.forEach(p => removerObjetoMundo('parede', p, paredesConstruidas)); limparPilaresSoltos(); return; }
-  
-  const piso = pisosConstruidos.find(p => p.mesh === hitObject);
-  if (piso) { removerObjetoMundo('piso', piso, pisosConstruidos); return; }
-  
-  const coluna = colunasSustentacao.find(p => p.mesh === hitObject);
-  if (coluna) { removerObjetoMundo('coluna', coluna, colunasSustentacao); return; }
-  
-  const escada = escadasConstruidas.find(e => e.mesh === hitObject.parent);
-  if (escada) { removerObjetoMundo('escada', escada, escadasConstruidas); return; }
-}
+function removerObjetoMundo(tipo, obj, arrayBase) {
+    if (!obj) return;
+    registrarRemocao(tipo, obj, arrayBase);
+    scene.remove(obj.mesh);
+    const idx = arrayBase.indexOf(obj);
+    if (idx > -1) arrayBase.splice(idx, 1);
 
-// ----------------------------------------------------
-// CONSTRUÇÃO ESTRUTURAL E AGRUPAMENTO
-// ----------------------------------------------------
+    if (obj.comodoId) {
+        const c = comodosConstruidos.find(x => x.id === obj.comodoId);
+        if (c) {
+            if (tipo === 'parede') c.paredes = c.paredes.filter(x => x !== obj);
+            if (tipo === 'pilar') c.pilares = c.pilares.filter(x => x !== obj);
+        }
+    }
+}
 function limparPilaresSoltos() {
     for (let i = pilaresConstruidos.length - 1; i >= 0; i--) {
         const pilar = pilaresConstruidos[i];
@@ -690,8 +646,30 @@ function criarOctogono(x1, z1, x2, z2, altura, comodoId = null) { const minX = M
 function criarColunaSustentacao(x, z, altura) { const alturaBase = configsCamera.nivel * altura; const materiais = [materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone()]; const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, altura, 0.4), materiais); mesh.position.set(x, alturaBase + altura / 2, z); scene.add(mesh); const coluna = { mesh, x, z, nivel: configsCamera.nivel, altura }; colunasSustentacao.push(coluna); registrarAdicao('coluna', coluna, colunasSustentacao); }
 function criarEscada(ax, az, bx, bz, alturaAndar) { const dx = bx - ax, dz = bz - az; const comp = Math.hypot(dx, dz); if (comp < 0.5) return; const degraus = Math.max(3, Math.floor(comp / (configMapa.tamanhoGrid / 2))); const escadaMesh = new THREE.Group(); const angle = Math.atan2(dx, dz); for (let i = 0; i < degraus; i++) { const stepD = comp / degraus, stepH = alturaAndar / degraus; const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, stepH * (i + 1), stepD), materialPiso.clone()); mesh.position.set(0, (stepH * (i + 1)) / 2, (i * stepD) - comp/2 + stepD/2); escadaMesh.add(mesh); } const alturaBase = configsCamera.nivel * alturaAndar; escadaMesh.position.set((ax+bx)/2, alturaBase, (az+bz)/2); escadaMesh.rotation.y = angle; scene.add(escadaMesh); const escada = { mesh: escadaMesh, nivel: configsCamera.nivel, isEscada: true }; escadasConstruidas.push(escada); registrarAdicao('escada', escada, escadasConstruidas); }
 
+function executarMarreta(hitObject) {
+  if (!hitObject || hitObject === meshChaoBase) return;
+  const isPiso = pisosConstruidos.some(p => p.mesh === hitObject);
+  const isParedeMode = ['parede', 'cerca', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo);
+  if (isParedeMode && isPiso) return; 
+  
+  const parede = paredesConstruidas.find(p => p.mesh === hitObject);
+  if (parede) { removerObjetoMundo('parede', parede, paredesConstruidas); limparPilaresSoltos(); return; }
+  
+  const pilar = pilaresConstruidos.find(p => p.mesh === hitObject);
+  if (pilar) { const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilar || p.pilarB === pilar); attachedWalls.forEach(p => removerObjetoMundo('parede', p, paredesConstruidas)); limparPilaresSoltos(); return; }
+  
+  const piso = pisosConstruidos.find(p => p.mesh === hitObject);
+  if (piso) { removerObjetoMundo('piso', piso, pisosConstruidos); return; }
+  
+  const coluna = colunasSustentacao.find(p => p.mesh === hitObject);
+  if (coluna) { removerObjetoMundo('coluna', coluna, colunasSustentacao); return; }
+  
+  const escada = escadasConstruidas.find(e => e.mesh === hitObject.parent);
+  if (escada) { removerObjetoMundo('escada', escada, escadasConstruidas); return; }
+}
+
 // ----------------------------------------------------
-// PINTURA E REMOÇÃO DE PINTURA
+// PINTURA E REMOÇÃO DE PINTURA (BORRACHA)
 // ----------------------------------------------------
 function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) { const mat = new THREE.MeshLambertMaterial(); if (item.tipo === 'cor') { mat.color.set(item.cor); } else { const tex = item.textura.clone(); tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(repeatX, repeatY); mat.map = tex; mat.color.set(0xffffff); } return mat; }
 function aplicarMaterialNaFace(mesh, faceIndex, item) { registrarPintura(mesh); let repeatX = 1, repeatY = 1; if (mesh.geometry && mesh.geometry.parameters) { const { width, height, depth } = mesh.geometry.parameters; if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; } } const novosMateriais = [...mesh.material]; novosMateriais[faceIndex] = gerarMaterialPintura(item, repeatX, repeatY); mesh.material = novosMateriais; finalizarPintura(mesh); }
@@ -705,14 +683,55 @@ function paredeQueBloqueia(x1, z1, x2, z2) { const midX = (x1+x2)/2, midZ = (z1+
 function encontrarAreaFechada(xInicial, zInicial) { const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = []; const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2; while (pilha.length && celulas.length < 50000) { const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`; if (visitados.has(chave)) continue; visitados.add(chave); if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; celulas.push(atual); [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => { const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid; if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz }); }); } return { celulas }; }
 
 // ----------------------------------------------------
-// GERENCIADOR DE VISIBILIDADE 
+// GERENCIADOR DE VISIBILIDADE E FANTASMA (CORRIGIDO)
 // ----------------------------------------------------
-function setOpacity(mesh, isTransparent, opacity) { if (!mesh) return; if (mesh.type === 'Group') { mesh.children.forEach(child => setOpacity(child, isTransparent, opacity)); } else if (Array.isArray(mesh.material)) { mesh.material.forEach(m => { m.transparent = isTransparent; m.opacity = opacity; }); } else if (mesh.material) { mesh.material.transparent = isTransparent; mesh.material.opacity = opacity; } }
+function setOpacity(mesh, isTransparent, opacity) { 
+    if (!mesh) return; 
+    if (mesh.type === 'Group') { 
+        mesh.children.forEach(child => setOpacity(child, isTransparent, opacity)); 
+    } else if (Array.isArray(mesh.material)) { 
+        mesh.material.forEach(m => { 
+            if (m.transparent !== isTransparent) m.needsUpdate = true; // CORREÇÃO: Exigência do Three.js para o Fantasma funcionar!
+            m.transparent = isTransparent; 
+            m.opacity = opacity; 
+        }); 
+    } else if (mesh.material) { 
+        if (mesh.material.transparent !== isTransparent) mesh.material.needsUpdate = true;
+        mesh.material.transparent = isTransparent; 
+        mesh.material.opacity = opacity; 
+    } 
+}
+
 export function atualizarVisibilidadeAndares(modoVisaoManual) {
   if (modoVisaoManual) modoVisaoAtual = modoVisaoManual; 
   const mostrarFantasma = (modoAtivo === 'coluna'); 
-  const aplicarParede = (obj) => { if (obj.nivel > configsCamera.nivel) { if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) { obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); } else { obj.mesh.visible = false; } } else if (obj.nivel < configsCamera.nivel) { obj.mesh.visible = true; obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, false, 1); } else { obj.mesh.visible = true; if (modoVisaoAtual === 'full') { obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, false, 1); } else if (modoVisaoAtual === 'cut') { obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, true, 0.3); } else if (modoVisaoAtual === 'low') { obj.mesh.scale.y = 0.1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura * 0.1) / 2; setOpacity(obj.mesh, false, 1); } } };
+  
+  const aplicarParede = (obj) => { 
+      if (obj.nivel > configsCamera.nivel) { 
+          if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) { 
+              obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); 
+          } else { obj.mesh.visible = false; } 
+      } else if (obj.nivel < configsCamera.nivel) { 
+          obj.mesh.visible = true; obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, false, 1); 
+      } else { 
+          obj.mesh.visible = true; 
+          if (modoVisaoAtual === 'full') { obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, false, 1); } 
+          else if (modoVisaoAtual === 'cut') { obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, true, 0.3); } 
+          else if (modoVisaoAtual === 'low') { obj.mesh.scale.y = 0.1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura * 0.1) / 2; setOpacity(obj.mesh, false, 1); } 
+      } 
+  };
+  
   paredesConstruidas.forEach(aplicarParede); pilaresConstruidos.forEach(aplicarParede);
   colunasSustentacao.forEach(obj => { if (obj.nivel > configsCamera.nivel) obj.mesh.visible = false; else { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } });
-  [pisosConstruidos, escadasConstruidas].forEach(arr => { arr.forEach(obj => { if (obj.nivel > configsCamera.nivel) { if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) { obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); } else obj.mesh.visible = false; } else { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } }); });
+  
+  [pisosConstruidos, escadasConstruidas].forEach(arr => { 
+      arr.forEach(obj => { 
+          if (obj.nivel > configsCamera.nivel) { 
+              if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) { obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); } 
+              else obj.mesh.visible = false; 
+          } else { 
+              obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); 
+          } 
+      }); 
+  });
 }
