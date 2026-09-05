@@ -21,9 +21,6 @@ export function reconstruirGrid() {
   meshChaoBase.rotation.x = -Math.PI / 2;
   meshChaoBase.position.y = 0;
   
-  // O CHÃO AGORA RECEBE SOMBRAS!
-  meshChaoBase.receiveShadow = true; 
-  
   scene.add(meshChaoBase);
 
   const pontos = [];
