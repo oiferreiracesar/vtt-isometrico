@@ -1,34 +1,42 @@
-// js/mapa.js - Gerenciamento do chão, grid e construção
+// js/mapa.js - Gerenciamento do chão e dimensões do tabuleiro
 import { scene } from './engine.js';
 
 export let configMapa = {
-  larguraChao: 32,
-  tamanhoGrid: 1,
-  imagemChaoDataUrl: null
+  largura: 32,      // Número de Colunas
+  profundidade: 18, // Número de Linhas
+  tamanhoGrid: 1
 };
 
 export let meshChaoBase;
 let gridHelper;
 
 export function iniciarMapa() {
-  const profundidadeChao = configMapa.larguraChao * 9 / 16;
-  
-  const materialChaoBase = new THREE.MeshLambertMaterial({ color: 0x2a2620 });
-  meshChaoBase = new THREE.Mesh(new THREE.PlaneGeometry(configMapa.larguraChao, profundidadeChao), materialChaoBase);
-  meshChaoBase.rotation.x = -Math.PI / 2;
-  meshChaoBase.position.y = 0;
-  scene.add(meshChaoBase);
+  reconstruirGrid();
+}
 
+// Recria a malha do chão e o desenho das linhas quando o Mestre altera o tamanho
+export function redimensionarMapa(novaLargura, novaProfundidade) {
+  configMapa.largura = novaLargura;
+  configMapa.profundidade = novaProfundidade;
   reconstruirGrid();
 }
 
 export function reconstruirGrid() {
+  // Limpa o chão antigo se existir
+  if (meshChaoBase) scene.remove(meshChaoBase);
   if (gridHelper) scene.remove(gridHelper);
   
-  const profundidadeChao = configMapa.larguraChao * 9 / 16;
+  // Cria o plano de colisão (onde o mouse "toca")
+  const materialChaoBase = new THREE.MeshLambertMaterial({ color: 0x2a2620 });
+  meshChaoBase = new THREE.Mesh(new THREE.PlaneGeometry(configMapa.largura, configMapa.profundidade), materialChaoBase);
+  meshChaoBase.rotation.x = -Math.PI / 2;
+  meshChaoBase.position.y = 0;
+  scene.add(meshChaoBase);
+
+  // Desenha as linhas da grade
   const pontos = [];
-  const meiaLargura = configMapa.larguraChao / 2;
-  const meiaProfundidade = profundidadeChao / 2;
+  const meiaLargura = configMapa.largura / 2;
+  const meiaProfundidade = configMapa.profundidade / 2;
   const t = configMapa.tamanhoGrid;
 
   for (let x = -meiaLargura; x <= meiaLargura + 1e-6; x += t) {
