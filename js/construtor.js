@@ -5,6 +5,7 @@ import { showAviso, itemSelecionadoAtual } from './ui.js';
 
 export let modoAtivo = null;
 export const paredesConstruidas = [];
+export const pilaresConstruidos = []; // NOVO: Gerencia as quinas perfeitamente
 export const pisosConstruidos = []; 
 
 let arrastandoConstrucao = false;
@@ -52,7 +53,12 @@ function raycastParedesEPisos(clientX, clientY) {
   mouseNdc.x = (clientX / window.innerWidth) * 2 - 1;
   mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouseNdc, camera);
-  const objetos = [...paredesConstruidas.map(p => p.mesh), ...pisosConstruidos.map(p => p.mesh), meshChaoBase];
+  const objetos = [
+      ...paredesConstruidas.map(p => p.mesh), 
+      ...pilaresConstruidos.map(p => p.mesh), 
+      ...pisosConstruidos.map(p => p.mesh), 
+      meshChaoBase
+  ];
   const hits = raycaster.intersectObjects(objetos);
   return hits.length ? hits[0] : null;
 }
@@ -67,19 +73,31 @@ canvas.addEventListener('pointerdown', e => {
   if (e.ctrlKey) {
     const hit = raycastParedesEPisos(e.clientX, e.clientY);
     if (hit && hit.object !== meshChaoBase) {
-      scene.remove(hit.object);
-      const idxParede = paredesConstruidas.findIndex(p => p.mesh === hit.object);
-      if (idxParede > -1) paredesConstruidas.splice(idxParede, 1);
-      const idxPiso = pisosConstruidos.findIndex(p => p.mesh === hit.object);
-      if (idxPiso > -1) pisosConstruidos.splice(idxPiso, 1);
-      showAviso("🗑️ Objeto demolido!");
+      
+      const paredeIdx = paredesConstruidas.findIndex(p => p.mesh === hit.object);
+      if (paredeIdx > -1) { removerParede(paredesConstruidas[paredeIdx]); showAviso("🗑️ Parede demolida!"); }
+      
+      const pilarIdx = pilaresConstruidos.findIndex(p => p.mesh === hit.object);
+      if (pilarIdx > -1) {
+          const pilarObj = pilaresConstruidos[pilarIdx];
+          const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilarObj || p.pilarB === pilarObj);
+          attachedWalls.forEach(p => removerParede(p));
+          showAviso("🗑️ Quina demolida!");
+      }
+
+      const pisoIdx = pisosConstruidos.findIndex(p => p.mesh === hit.object);
+      if (pisoIdx > -1) {
+          scene.remove(pisosConstruidos[pisoIdx].mesh);
+          pisosConstruidos.splice(pisoIdx, 1);
+          showAviso("🗑️ Piso demolido!");
+      }
     }
     return;
   }
 
   if (e.altKey) return; 
 
-  // 2. INICIAR ARRASTE
+  // 2. INICIAR ARRASTE DE SALA/PAREDE
   if (['parede', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) {
     const hit = raycastChao(e.clientX, e.clientY);
     if (hit) {
@@ -109,15 +127,15 @@ canvas.addEventListener('pointerdown', e => {
     if (!item) { showAviso("Selecione um material no catálogo primeiro!"); return; }
 
     const isParede = paredesConstruidas.some(p => p.mesh === hitAll.object);
+    const isPilar = pilaresConstruidos.some(p => p.mesh === hitAll.object);
     
-    // PINTAR COM SHIFT (PREENCHER CÔMODO OU FACHADA)
+    // PINTAR COM SHIFT (PREENCHER CÔMODO)
     if (e.shiftKey) {
-      // Como a parede tem espessura, o clique detecta perfeitamente se você tocou na face de dentro ou de fora!
       const centroX = snapCentroCelula(hitAll.point.x);
       const centroZ = snapCentroCelula(hitAll.point.z);
       const { celulas } = encontrarAreaFechada(centroX, centroZ);
       
-      if (isParede) {
+      if (isParede || isPilar) {
          celulas.forEach(c => {
            [['x',1],['x',-1],['z',1],['z',-1]].forEach(([eixo, dir]) => {
               const dx = eixo==='x' ? configMapa.tamanhoGrid * dir : 0;
@@ -125,28 +143,44 @@ canvas.addEventListener('pointerdown', e => {
               const p = paredeQueBloqueia(c.x, c.z, c.x + dx, c.z + dz);
               
               if (p && !p.isPorta) {
-                 const normalFace0 = new THREE.Vector3(1, 0, 0).applyQuaternion(p.mesh.quaternion);
-                 const dirParaCelula = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z);
-                 const faceInterna = normalFace0.dot(dirParaCelula) > 0 ? 0 : 1;
-                 aplicarMaterialNaFace(p.mesh, faceInterna, item);
+                 const dirNorm = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z).normalize();
+                 pintarFacePorNormalMundial(p.mesh, dirNorm, item);
+                 if (p.pilarA) pintarFacePorNormalMundial(p.pilarA.mesh, dirNorm, item);
+                 if (p.pilarB) pintarFacePorNormalMundial(p.pilarB.mesh, dirNorm, item);
               }
            });
          });
-         showAviso("🎨 Paredes pintadas de uma vez!");
+         showAviso("🎨 Papel de parede aplicado na sala inteira!");
       } else {
          celulas.forEach(c => aplicarPiso(c.x, c.z, item));
-         showAviso("🎨 Chão pintado de uma vez!");
+         showAviso("🎨 Piso aplicado na sala inteira!");
       }
     } 
-    // PINTAR APENAS UM QUADRADO DA PAREDE OU DO CHÃO (CLIQUE SIMPLES)
+    // PINTAR APENAS UM LADO (CLIQUE SIMPLES)
     else {
-      if (isParede) {
-        const parede = paredesConstruidas.find(p => p.mesh === hitAll.object);
-        if(!parede.isPorta) {
-           const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
-           if (faceClicada === 0 || faceClicada === 1) { 
-              aplicarMaterialNaFace(hitAll.object, faceClicada, item);
-           }
+      if (isParede || isPilar) {
+        const targetObject = hitAll.object;
+        const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
+        
+        const localNormals = [
+            new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0),
+            new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0),
+            new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)
+        ];
+        const worldNormal = localNormals[faceClicada].clone().applyQuaternion(targetObject.quaternion).normalize();
+
+        pintarFacePorNormalMundial(targetObject, worldNormal, item);
+
+        if (isParede) {
+            const parede = paredesConstruidas.find(p => p.mesh === targetObject);
+            if(!parede.isPorta) {
+                if (parede.pilarA) pintarFacePorNormalMundial(parede.pilarA.mesh, worldNormal, item);
+                if (parede.pilarB) pintarFacePorNormalMundial(parede.pilarB.mesh, worldNormal, item);
+            }
+        } else if (isPilar) {
+            const pilarObj = pilaresConstruidos.find(p => p.mesh === targetObject);
+            const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilarObj || p.pilarB === pilarObj);
+            attachedWalls.forEach(p => { if (!p.isPorta) pintarFacePorNormalMundial(p.mesh, worldNormal, item); });
         }
       } else {
         aplicarPiso(snapCentroCelula(hitAll.point.x), snapCentroCelula(hitAll.point.z), item);
@@ -176,7 +210,7 @@ canvas.addEventListener('pointermove', e => {
       if (modoAtivo === 'parede') {
         const dx = px - pontoA.x, dz = pz - pontoA.z;
         const comp = Math.sqrt(dx*dx + dz*dz) || 0.01;
-        previaMesh.scale.set(0.25, obterAltura(), comp + 0.248);
+        previaMesh.scale.set(0.25, obterAltura(), comp + 0.25);
         previaMesh.position.set((pontoA.x + px)/2, obterAltura()/2, (pontoA.z + pz)/2);
         previaMesh.rotation.y = Math.atan2(dx, dz);
         previaMesh.visible = true;
@@ -212,57 +246,81 @@ window.addEventListener('pointerup', e => {
 });
 
 // ----------------------------------------------------
-// FUNÇÕES DE CRIAÇÃO GEOMÉTRICA (SUBDIVISÃO EM GRID)
+// NOVA ARQUITETURA DE QUINAS (PILARES E SEGMENTOS)
 // ----------------------------------------------------
-
-// Matemática que elimina 100% o Z-Fighting alternando microscópicamente a espessura dos blocos
-function obterEspessura(cx, cz) {
-  const hx = Math.round(cx / configMapa.tamanhoGrid - 0.5);
-  const hz = Math.round(cz / configMapa.tamanhoGrid - 0.5);
-  const hash = Math.abs(hx * 73 + hz * 31);
-  const espessuras = [0.250, 0.247, 0.244, 0.241, 0.238];
-  return espessuras[hash % 5];
+function removerParede(parede) {
+    scene.remove(parede.mesh);
+    const idx = paredesConstruidas.indexOf(parede);
+    if (idx > -1) paredesConstruidas.splice(idx, 1);
+    limparPilaresSoltos();
 }
 
-function criarSegmentoParede(ax, az, bx, bz, altura, espessura) {
+function limparPilaresSoltos() {
+    for (let i = pilaresConstruidos.length - 1; i >= 0; i--) {
+        const pilar = pilaresConstruidos[i];
+        const emUso = paredesConstruidas.some(p => p.pilarA === pilar || p.pilarB === pilar);
+        if (!emUso) {
+            scene.remove(pilar.mesh);
+            pilaresConstruidos.splice(i, 1);
+        }
+    }
+}
+
+function obterOuCriarPilar(x, z, altura) {
+    let pilar = pilaresConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01);
+    if (!pilar) {
+        const materiais = [
+            materialParede.clone(), materialParede.clone(), materialParede.clone(),
+            materialParede.clone(), materialParede.clone(), materialParede.clone()
+        ];
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, 0.25), materiais);
+        mesh.position.set(x, altura / 2, z);
+        scene.add(mesh);
+        pilar = { mesh, x, z, altura };
+        pilaresConstruidos.push(pilar);
+    }
+    return pilar;
+}
+
+function criarSegmentoParede(ax, az, bx, bz, altura) {
+  // Evita duplicar paredes no mesmo lugar exato
+  const existe = paredesConstruidas.find(p => 
+      (Math.abs(p.ax - ax) < 0.01 && Math.abs(p.az - az) < 0.01 && Math.abs(p.bx - bx) < 0.01 && Math.abs(p.bz - bz) < 0.01) ||
+      (Math.abs(p.ax - bx) < 0.01 && Math.abs(p.az - bz) < 0.01 && Math.abs(p.bx - ax) < 0.01 && Math.abs(p.bz - az) < 0.01)
+  );
+  if (existe) return;
+
   const dx = bx - ax, dz = bz - az;
-  const comp = Math.sqrt(dx*dx + dz*dz);
-  if (comp < 0.05) return;
+  const compTotal = Math.hypot(dx, dz);
+  if (compTotal < 0.05) return;
   
+  const pilarA = obterOuCriarPilar(ax, az, altura);
+  const pilarB = obterOuCriarPilar(bx, bz, altura);
+
+  // A parede agora encaixa EXATAMENTE entre os pilares, erradicando o Z-Fighting de vez
+  const compParede = Math.max(0.001, compTotal - 0.25);
   const materiais = [
-    materialParede.clone(), materialParede.clone(), 
-    materialParede.clone(), materialParede.clone(), 
-    materialParede.clone(), materialParede.clone()
+    materialParede.clone(), materialParede.clone(), materialParede.clone(), 
+    materialParede.clone(), materialParede.clone(), materialParede.clone()
   ];
 
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(espessura, altura, comp + 0.248), materiais);
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, compParede), materiais);
   mesh.position.set((ax+bx)/2, altura/2, (az+bz)/2);
   mesh.rotation.y = Math.atan2(dx, dz);
   scene.add(mesh);
-  paredesConstruidas.push({ mesh, ax, az, bx, bz, altura, isPorta: false });
+  paredesConstruidas.push({ mesh, ax, az, bx, bz, altura, isPorta: false, pilarA, pilarB });
 }
 
-// Essa função pica a parede longa que o usuário desenhou em tijolos individuais 1x1
 function criarLinhaDeParedes(ax, az, bx, bz, altura) {
   const dx = bx - ax, dz = bz - az;
   const compTotal = Math.hypot(dx, dz);
   if (compTotal < 0.05) return;
-
   const qtd = Math.max(1, Math.round(compTotal / configMapa.tamanhoGrid));
   const stepX = dx / qtd;
   const stepZ = dz / qtd;
 
   for (let i = 0; i < qtd; i++) {
-    const startX = ax + stepX * i;
-    const startZ = az + stepZ * i;
-    const endX = ax + stepX * (i + 1);
-    const endZ = az + stepZ * (i + 1);
-    
-    const cx = (startX + endX) / 2;
-    const cz = (startZ + endZ) / 2;
-    const espessura = obterEspessura(cx, cz);
-    
-    criarSegmentoParede(startX, startZ, endX, endZ, altura, espessura);
+    criarSegmentoParede(ax + stepX * i, az + stepZ * i, ax + stepX * (i + 1), az + stepZ * (i + 1), altura);
   }
 }
 
@@ -310,10 +368,25 @@ function gerarMaterialPintura(item) {
 }
 
 function aplicarMaterialNaFace(mesh, faceIndex, item) {
-  const mat = gerarMaterialPintura(item);
   const novosMateriais = [...mesh.material]; 
-  novosMateriais[faceIndex] = mat;
+  novosMateriais[faceIndex] = gerarMaterialPintura(item);
   mesh.material = novosMateriais;
+}
+
+function pintarFacePorNormalMundial(mesh, targetNormal, item) {
+    const tNorm = targetNormal.clone().normalize();
+    const localNormals = [
+        new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0),
+        new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0),
+        new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)
+    ];
+    for (let i = 0; i < 6; i++) {
+        const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize();
+        // Dot product aproxima o ângulo. Se apontar na mesma direção (> 0.5), ele pinta a face.
+        if (worldNormal.dot(tNorm) > 0.5) {
+            aplicarMaterialNaFace(mesh, i, item);
+        }
+    }
 }
 
 function aplicarPiso(x, z, item) {
@@ -376,16 +449,18 @@ function encontrarAreaFechada(xInicial, zInicial) {
 // CONTROLE DE VISÃO DE PAREDES (SIMS STYLE)
 // ----------------------------------------------------
 export function mudarVisaoParedes(modo) {
-  paredesConstruidas.forEach(p => {
+  const aplicar = (p) => {
      if (modo === 'full') {
         p.mesh.scale.y = 1; p.mesh.position.y = p.altura / 2;
-        p.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; });
+        if(Array.isArray(p.mesh.material)) p.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; });
      } else if (modo === 'cut') {
         p.mesh.scale.y = 1; p.mesh.position.y = p.altura / 2;
-        p.mesh.material.forEach(m => { m.transparent = true; m.opacity = 0.3; });
+        if(Array.isArray(p.mesh.material)) p.mesh.material.forEach(m => { m.transparent = true; m.opacity = 0.3; });
      } else if (modo === 'low') {
         p.mesh.scale.y = 0.1; p.mesh.position.y = (p.altura * 0.1) / 2;
-        p.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; });
+        if(Array.isArray(p.mesh.material)) p.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; });
      }
-  });
+  };
+  paredesConstruidas.forEach(aplicar);
+  pilaresConstruidos.forEach(aplicar);
 }
