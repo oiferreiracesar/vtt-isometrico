@@ -5,12 +5,11 @@ import { showAviso, itemSelecionadoAtual } from './ui.js';
 
 export let modoAtivo = null;
 export const paredesConstruidas = [];
-export const pisosConstruidos = []; // Guarda os "quadradinhos" do chão revestido
+export const pisosConstruidos = []; 
 
 let arrastandoConstrucao = false;
 let pontoA = null;
 
-// Materiais Visuais
 const materialParede = new THREE.MeshLambertMaterial({ color: 0x6a5f48 });
 const materialPiso = new THREE.MeshLambertMaterial({ color: 0x8a7550 });
 const materialPrevia = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 });
@@ -62,9 +61,9 @@ function raycastParedesEPisos(clientX, clientY) {
 // LÓGICA DE CLIQUE E ARRASTE (Construção)
 // ----------------------------------------------------
 canvas.addEventListener('pointerdown', e => {
-  if (e.button !== 0 || e.altKey || !modoAtivo) return;
+  if (e.button !== 0 || !modoAtivo) return;
 
-  // 1. MARRETA (DELETAR)
+  // 1. MARRETA (DELETAR COM CTRL)
   if (e.ctrlKey) {
     const hit = raycastParedesEPisos(e.clientX, e.clientY);
     if (hit && hit.object !== meshChaoBase) {
@@ -80,6 +79,9 @@ canvas.addEventListener('pointerdown', e => {
     }
     return;
   }
+
+  // Se apertou Alt, ignora (usado para mover a câmera)
+  if (e.altKey) return; 
 
   // 2. INICIAR ARRASTE DE SALA/PAREDE
   if (['parede', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) {
@@ -98,12 +100,11 @@ canvas.addEventListener('pointerdown', e => {
   if (modoAtivo === 'porta') {
     const paredeAlvo = paredesConstruidas.find(p => p.mesh === hitAll.object);
     if (paredeAlvo) {
-      // Simulação de porta: cor de madeira e atravessável
-      hitAll.object.material = new THREE.MeshLambertMaterial({ color: 0x4a3320 });
+      // Simulação rápida de porta mudando todas as faces para madeira
+      const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 });
+      hitAll.object.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta];
       paredeAlvo.isPorta = true;
       showAviso("🚪 Porta instalada!");
-    } else {
-      showAviso("Clique em uma parede para instalar a porta.");
     }
     return;
   }
@@ -121,27 +122,40 @@ canvas.addEventListener('pointerdown', e => {
       const { celulas } = encontrarAreaFechada(centroX, centroZ);
       
       if (isParede) {
-         // Pinta todas as paredes do cômodo
+         // Pinta as paredes viradas PARA O CÔMODO
          celulas.forEach(c => {
            [['x',1],['x',-1],['z',1],['z',-1]].forEach(([eixo, dir]) => {
               const dx = eixo==='x' ? configMapa.tamanhoGrid * dir : 0;
               const dz = eixo==='z' ? configMapa.tamanhoGrid * dir : 0;
               const p = paredeQueBloqueia(c.x, c.z, c.x + dx, c.z + dz);
-              if (p && !p.isPorta) aplicarMaterial(p.mesh, item);
+              
+              if (p && !p.isPorta) {
+                 // Identifica matematicamente qual lado (0 ou 1) está virado pro chão do cômodo
+                 const normalFace0 = new THREE.Vector3(1, 0, 0).applyQuaternion(p.mesh.quaternion);
+                 const dirParaCelula = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z);
+                 const faceInterna = normalFace0.dot(dirParaCelula) > 0 ? 0 : 1;
+                 
+                 aplicarMaterialNaFace(p.mesh, faceInterna, item);
+              }
            });
          });
-         showAviso("🎨 Papel de parede aplicado na sala toda!");
+         showAviso("🎨 Papel de parede aplicado na sala inteira!");
       } else {
-         // Pinta todo o piso do cômodo
          celulas.forEach(c => aplicarPiso(c.x, c.z, item));
-         showAviso("🎨 Piso aplicado na sala toda!");
+         showAviso("🎨 Piso aplicado na sala inteira!");
       }
     } 
-    // PINTAR CLIQUE SIMPLES
+    // PINTAR APENAS UM LADO DA PAREDE (CLIQUE SIMPLES)
     else {
       if (isParede) {
         const parede = paredesConstruidas.find(p => p.mesh === hitAll.object);
-        if(!parede.isPorta) aplicarMaterial(hitAll.object, item);
+        if(!parede.isPorta) {
+           // Descobre qual lado o usuário clicou (0 = Lado Direito, 1 = Lado Esquerdo)
+           const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
+           if (faceClicada === 0 || faceClicada === 1) { 
+              aplicarMaterialNaFace(hitAll.object, faceClicada, item);
+           }
+        }
       } else {
         aplicarPiso(snapCentroCelula(hitAll.point.x), snapCentroCelula(hitAll.point.z), item);
       }
@@ -167,7 +181,6 @@ canvas.addEventListener('pointermove', e => {
     }
     cursor3D.visible = true;
 
-    // Atualiza Prévia do Arraste
     if (arrastandoConstrucao && pontoA) {
       if (modoAtivo === 'parede') {
         const dx = px - pontoA.x, dz = pz - pontoA.z;
@@ -194,7 +207,6 @@ window.addEventListener('pointerup', e => {
     const hit = raycastChao(e.clientX, e.clientY);
     if (hit) {
       const px = snapGrid(hit.point.x), pz = snapGrid(hit.point.z);
-      // Só constrói se arrastou pelo menos um pouco
       if (Math.abs(px - pontoA.x) > 0.1 || Math.abs(pz - pontoA.z) > 0.1) {
         if (modoAtivo === 'parede') criarSegmentoParede(pontoA.x, pontoA.z, px, pz, obterAltura(), 0.25);
         else if (modoAtivo === 'retangulo') criarRetangulo(pontoA.x, pontoA.z, px, pz, obterAltura());
@@ -209,13 +221,24 @@ window.addEventListener('pointerup', e => {
 });
 
 // ----------------------------------------------------
-// FUNÇÕES DE CRIAÇÃO GEOMÉTRICA E PINTURA
+// FUNÇÕES DE CRIAÇÃO GEOMÉTRICA (COM 6 LADOS)
 // ----------------------------------------------------
 function criarSegmentoParede(ax, az, bx, bz, altura, ajusteQuina = 0.25) {
   const dx = bx - ax, dz = bz - az;
   const comp = Math.sqrt(dx*dx + dz*dz);
   if (comp < 0.05) return;
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, comp + ajusteQuina), materialParede.clone());
+  
+  // A parede agora é um array de 6 materiais (um para cada lado)
+  const materiais = [
+    materialParede.clone(), // 0: Lado Direito
+    materialParede.clone(), // 1: Lado Esquerdo
+    materialParede.clone(), // 2: Cima
+    materialParede.clone(), // 3: Baixo
+    materialParede.clone(), // 4: Frente
+    materialParede.clone()  // 5: Trás
+  ];
+
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, comp + ajusteQuina), materiais);
   mesh.position.set((ax+bx)/2, altura/2, (az+bz)/2);
   mesh.rotation.y = Math.atan2(dx, dz);
   scene.add(mesh);
@@ -247,7 +270,10 @@ function criarOctogono(x1, z1, x2, z2, altura) {
   ], altura, 0.10);
 }
 
-function aplicarMaterial(mesh, item) {
+// ----------------------------------------------------
+// APLICAÇÃO DE PINTURA E PISO
+// ----------------------------------------------------
+function gerarMaterialPintura(item) {
   const mat = new THREE.MeshLambertMaterial();
   if (item.tipo === 'cor') {
     mat.color.set(item.cor);
@@ -259,7 +285,15 @@ function aplicarMaterial(mesh, item) {
     mat.map = tex;
     mat.color.set(0xffffff);
   }
-  mesh.material = mat;
+  return mat;
+}
+
+function aplicarMaterialNaFace(mesh, faceIndex, item) {
+  const mat = gerarMaterialPintura(item);
+  // Atualiza estritamente a face clicada (0 ou 1), preservando as outras
+  const novosMateriais = [...mesh.material]; 
+  novosMateriais[faceIndex] = mat;
+  mesh.material = novosMateriais;
 }
 
 function aplicarPiso(x, z, item) {
@@ -271,7 +305,7 @@ function aplicarPiso(x, z, item) {
     tile = { mesh, x, z };
     pisosConstruidos.push(tile);
   }
-  aplicarMaterial(tile.mesh, item);
+  tile.mesh.material = gerarMaterialPintura(item);
 }
 
 // ----------------------------------------------------
@@ -287,7 +321,6 @@ function distanciaPontoSegmento(px, pz, ax, az, bx, bz) {
 function paredeQueBloqueia(x1, z1, x2, z2) {
   const midX = (x1+x2)/2, midZ = (z1+z2)/2;
   return paredesConstruidas.find(p => {
-    // Tolerância para dizer se a parede cruza o caminho entre duas células
     return distanciaPontoSegmento(midX, midZ, p.ax, p.az, p.bx, p.bz) < 0.2;
   }) || null;
 }
@@ -304,7 +337,6 @@ function encontrarAreaFechada(xInicial, zInicial) {
     if (visitados.has(chave)) continue;
     visitados.add(chave);
     
-    // Proteção para não pintar o mapa infinito
     if (Math.abs(atual.x) > 50 || Math.abs(atual.z) > 50) continue; 
     
     celulas.push(atual);
@@ -327,13 +359,13 @@ export function mudarVisaoParedes(modo) {
   paredesConstruidas.forEach(p => {
      if (modo === 'full') {
         p.mesh.scale.y = 1; p.mesh.position.y = p.altura / 2;
-        p.mesh.material.transparent = false; p.mesh.material.opacity = 1;
+        p.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; });
      } else if (modo === 'cut') {
         p.mesh.scale.y = 1; p.mesh.position.y = p.altura / 2;
-        p.mesh.material.transparent = true; p.mesh.material.opacity = 0.3;
+        p.mesh.material.forEach(m => { m.transparent = true; m.opacity = 0.3; });
      } else if (modo === 'low') {
         p.mesh.scale.y = 0.1; p.mesh.position.y = (p.altura * 0.1) / 2;
-        p.mesh.material.transparent = false; p.mesh.material.opacity = 1;
+        p.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; });
      }
   });
 }
