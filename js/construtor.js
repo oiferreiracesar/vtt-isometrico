@@ -74,7 +74,8 @@ canvas.addEventListener('pointermove', e => {
     if (modoAtivo === 'parede' && paredePontoA) {
       const dx = px - paredePontoA.x, dz = pz - paredePontoA.z;
       const comp = Math.sqrt(dx*dx + dz*dz) || 0.01;
-      previaParede.scale.set(0.25, obterAltura(), comp);
+      // Adicionamos + 0.25 no Z (comprimento) da escala para fechar as quinas
+      previaParede.scale.set(0.25, obterAltura(), comp + 0.25);
       previaParede.position.set((paredePontoA.x + px)/2, obterAltura()/2, (paredePontoA.z + pz)/2);
       previaParede.rotation.y = Math.atan2(dx, dz);
       previaParede.visible = true;
@@ -113,7 +114,10 @@ function criarParede(ax, az, bx, bz, altura) {
   const comp = Math.sqrt(dx*dx + dz*dz);
   if (comp < 0.05) return;
 
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, comp), materialParede.clone());
+  const espessura = 0.25;
+  // A mágica: comp + espessura para preencher as quinas perfeitamente
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(espessura, altura, comp + espessura), materialParede.clone());
+  
   mesh.position.set((ax+bx)/2, altura/2, (az+bz)/2);
   mesh.rotation.y = Math.atan2(dx, dz);
   scene.add(mesh);
