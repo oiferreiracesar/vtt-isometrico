@@ -1,5 +1,5 @@
 // js/ui.js - Gerenciamento da Interface HTML (Com Blindagem de Erros)
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer } from './construtor.js';
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteComodo, girarComodoSelecionado, deletarComodoSelecionado } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
 
@@ -13,6 +13,21 @@ export function showAviso(msg) {
   }
   el.textContent = msg; el.style.display = 'block';
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// O GIZMO DO THE SIMS
+export function mostrarGizmo(x, y) {
+    const g = document.getElementById('room-gizmo');
+    if(g) {
+        g.style.display = 'flex';
+        g.style.left = (x - 85) + 'px'; 
+        g.style.top = (y - 70) + 'px'; 
+    }
+}
+
+export function esconderGizmo() {
+    const g = document.getElementById('room-gizmo');
+    if(g) g.style.display = 'none';
 }
 
 export let paleta = [];
@@ -100,10 +115,16 @@ export function iniciarUI() {
     });
   });
 
+  // BOTÕES DE HISTÓRICO E GIZMO
   document.getElementById('btnDesfazer')?.addEventListener('click', desfazer);
   document.getElementById('btnRefazer')?.addEventListener('click', refazer);
 
-  document.getElementById('btnModoSelecao')?.addEventListener('click', () => ativarFerramenta('btnModoSelecao', 'selecao', 'Seleção: Clique e segure para Mover o cômodo pelo mapa.'));
+  document.getElementById('gizmoMove')?.addEventListener('click', iniciarArrasteComodo);
+  document.getElementById('gizmoRotLeft')?.addEventListener('click', () => girarComodoSelecionado('esq'));
+  document.getElementById('gizmoRotRight')?.addEventListener('click', () => girarComodoSelecionado('dir'));
+  document.getElementById('gizmoDelete')?.addEventListener('click', deletarComodoSelecionado);
+
+  // FERRAMENTAS
   document.getElementById('btnModoParede')?.addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
   document.getElementById('btnModoCerca')?.addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
   document.getElementById('btnModoRetangulo')?.addEventListener('click', () => ativarFerramenta('btnModoRetangulo', 'retangulo', 'Sala Retangular: Clique e arraste.'));
@@ -114,7 +135,7 @@ export function iniciarUI() {
   
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada: Arraste para o sentido que ela sobe.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Modo de Navegação livre.'));
+  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala para ver opções.'));
 
   const botoesFuturos = ['btnModoTelhado', 'btnModoTerreno'];
   botoesFuturos.forEach(id => { document.getElementById(id)?.addEventListener('click', () => showAviso("Em breve!")); });
