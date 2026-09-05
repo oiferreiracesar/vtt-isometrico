@@ -1,4 +1,4 @@
-// js/construtor.js - A Mágica de Construção e Pintura (The Sims Style)
+// js/construtor.js - Sombras Dinâmicas, Cercas e Marreta com Arraste
 import { scene, camera, canvas } from './engine.js';
 import { configMapa, meshChaoBase } from './mapa.js';
 import { showAviso, itemSelecionadoAtual } from './ui.js';
@@ -12,6 +12,7 @@ let arrastandoConstrucao = false;
 let pontoA = null;
 
 const materialParede = new THREE.MeshLambertMaterial({ color: 0x6a5f48 });
+const materialCerca = new THREE.MeshLambertMaterial({ color: 0x5a4f38 }); // Material da cerca
 const materialPiso = new THREE.MeshLambertMaterial({ color: 0x8a7550 });
 const materialPrevia = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 });
 const materialCursor = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false });
@@ -53,55 +54,40 @@ function raycastParedesEPisos(clientX, clientY) {
   mouseNdc.x = (clientX / window.innerWidth) * 2 - 1;
   mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouseNdc, camera);
-  const objetos = [
-      ...paredesConstruidas.map(p => p.mesh), 
-      ...pilaresConstruidos.map(p => p.mesh), 
-      ...pisosConstruidos.map(p => p.mesh), 
-      meshChaoBase
-  ];
+  const objetos = [...paredesConstruidas.map(p => p.mesh), ...pilaresConstruidos.map(p => p.mesh), ...pisosConstruidos.map(p => p.mesh), meshChaoBase];
   const hits = raycaster.intersectObjects(objetos);
   return hits.length ? hits[0] : null;
 }
 
-// ----------------------------------------------------
-// LÓGICA DE CLIQUE E ARRASTE (Construção)
-// ----------------------------------------------------
+// Lógica isolada para deletar (agora usada no clique e no arraste)
+function executarMarreta(hitObject) {
+  if (hitObject === meshChaoBase) return;
+  const paredeIdx = paredesConstruidas.findIndex(p => p.mesh === hitObject);
+  if (paredeIdx > -1) { removerParede(paredesConstruidas[paredeIdx]); }
+  
+  const pilarIdx = pilaresConstruidos.findIndex(p => p.mesh === hitObject);
+  if (pilarIdx > -1) {
+      const pilarObj = pilaresConstruidos[pilarIdx];
+      const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilarObj || p.pilarB === pilarObj);
+      attachedWalls.forEach(p => removerParede(p));
+  }
+  const pisoIdx = pisosConstruidos.findIndex(p => p.mesh === hitObject);
+  if (pisoIdx > -1) { scene.remove(pisosConstruidos[pisoIdx].mesh); pisosConstruidos.splice(pisoIdx, 1); }
+}
+
 canvas.addEventListener('pointerdown', e => {
   if (e.button !== 0 || !modoAtivo) return;
 
   if (e.ctrlKey) {
     const hit = raycastParedesEPisos(e.clientX, e.clientY);
-    if (hit && hit.object !== meshChaoBase) {
-      
-      const paredeIdx = paredesConstruidas.findIndex(p => p.mesh === hit.object);
-      if (paredeIdx > -1) { removerParede(paredesConstruidas[paredeIdx]); showAviso("🗑️ Parede demolida!"); }
-      
-      const pilarIdx = pilaresConstruidos.findIndex(p => p.mesh === hit.object);
-      if (pilarIdx > -1) {
-          const pilarObj = pilaresConstruidos[pilarIdx];
-          const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilarObj || p.pilarB === pilarObj);
-          attachedWalls.forEach(p => removerParede(p));
-          showAviso("🗑️ Quina demolida!");
-      }
-
-      const pisoIdx = pisosConstruidos.findIndex(p => p.mesh === hit.object);
-      if (pisoIdx > -1) {
-          scene.remove(pisosConstruidos[pisoIdx].mesh);
-          pisosConstruidos.splice(pisoIdx, 1);
-          showAviso("🗑️ Piso demolido!");
-      }
-    }
+    if (hit) executarMarreta(hit.object);
     return;
   }
-
   if (e.altKey) return; 
 
-  if (['parede', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) {
+  if (['parede', 'cerca', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) {
     const hit = raycastChao(e.clientX, e.clientY);
-    if (hit) {
-      pontoA = { x: snapGrid(hit.point.x), z: snapGrid(hit.point.z) };
-      arrastandoConstrucao = true;
-    }
+    if (hit) { pontoA = { x: snapGrid(hit.point.x), z: snapGrid(hit.point.z) }; arrastandoConstrucao = true; }
     return;
   }
 
@@ -110,35 +96,30 @@ canvas.addEventListener('pointerdown', e => {
 
   if (modoAtivo === 'porta') {
     const paredeAlvo = paredesConstruidas.find(p => p.mesh === hitAll.object);
-    if (paredeAlvo) {
+    if (paredeAlvo && !paredeAlvo.isCerca) { // Cercas não levam portas
       const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 });
       hitAll.object.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta];
       paredeAlvo.isPorta = true;
-      showAviso("🚪 Porta instalada!");
     }
     return;
   }
 
   if (modoAtivo === 'pintura') {
     const item = itemSelecionadoAtual();
-    if (!item) { showAviso("Selecione um material no catálogo primeiro!"); return; }
+    if (!item) return;
 
     const isParede = paredesConstruidas.some(p => p.mesh === hitAll.object);
     const isPilar = pilaresConstruidos.some(p => p.mesh === hitAll.object);
     
     if (e.shiftKey) {
-      const centroX = snapCentroCelula(hitAll.point.x);
-      const centroZ = snapCentroCelula(hitAll.point.z);
+      const centroX = snapCentroCelula(hitAll.point.x), centroZ = snapCentroCelula(hitAll.point.z);
       const { celulas } = encontrarAreaFechada(centroX, centroZ);
-      
       if (isParede || isPilar) {
          celulas.forEach(c => {
            [['x',1],['x',-1],['z',1],['z',-1]].forEach(([eixo, dir]) => {
-              const dx = eixo==='x' ? configMapa.tamanhoGrid * dir : 0;
-              const dz = eixo==='z' ? configMapa.tamanhoGrid * dir : 0;
+              const dx = eixo==='x' ? configMapa.tamanhoGrid * dir : 0, dz = eixo==='z' ? configMapa.tamanhoGrid * dir : 0;
               const p = paredeQueBloqueia(c.x, c.z, c.x + dx, c.z + dz);
-              
-              if (p && !p.isPorta) {
+              if (p && !p.isPorta && !p.isCerca) { // Não pinta cercas no shift
                  const dirNorm = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z).normalize();
                  pintarFacePorNormalMundial(p.mesh, dirNorm, item);
                  if (p.pilarA) pintarFacePorNormalMundial(p.pilarA.mesh, dirNorm, item);
@@ -146,26 +127,14 @@ canvas.addEventListener('pointerdown', e => {
               }
            });
          });
-         showAviso("🎨 Papel de parede aplicado na área inteira!");
-      } else {
-         celulas.forEach(c => aplicarPiso(c.x, c.z, item));
-         showAviso("🎨 Piso aplicado na área inteira!");
-      }
-    } 
-    else {
+      } else { celulas.forEach(c => aplicarPiso(c.x, c.z, item)); }
+    } else {
       if (isParede || isPilar) {
         const targetObject = hitAll.object;
         const faceClicada = hitAll.face ? hitAll.face.materialIndex : 0;
-        
-        const localNormals = [
-            new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0),
-            new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0),
-            new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)
-        ];
+        const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
         const worldNormal = localNormals[faceClicada].clone().applyQuaternion(targetObject.quaternion).normalize();
-
         pintarFacePorNormalMundial(targetObject, worldNormal, item);
-
         if (isParede) {
             const parede = paredesConstruidas.find(p => p.mesh === targetObject);
             if(!parede.isPorta) {
@@ -177,9 +146,7 @@ canvas.addEventListener('pointerdown', e => {
             const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilarObj || p.pilarB === pilarObj);
             attachedWalls.forEach(p => { if (!p.isPorta) pintarFacePorNormalMundial(p.mesh, worldNormal, item); });
         }
-      } else {
-        aplicarPiso(snapCentroCelula(hitAll.point.x), snapCentroCelula(hitAll.point.z), item);
-      }
+      } else { aplicarPiso(snapCentroCelula(hitAll.point.x), snapCentroCelula(hitAll.point.z), item); }
     }
   }
 });
@@ -187,39 +154,41 @@ canvas.addEventListener('pointerdown', e => {
 canvas.addEventListener('pointermove', e => {
   if (!modoAtivo) return;
 
+  // LÓGICA DO CTRL + ARRASTAR (Marreta Contínua)
+  if (e.buttons === 1 && e.ctrlKey) {
+      const hit = raycastParedesEPisos(e.clientX, e.clientY);
+      if (hit) executarMarreta(hit.object);
+      return;
+  }
+
   const hit = raycastChao(e.clientX, e.clientY);
   if (hit) {
     const px = snapGrid(hit.point.x), pz = snapGrid(hit.point.z);
-    
     cursor3D.material = e.ctrlKey ? materialMarreta : materialCursor;
     cursor3D.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1);
-    
-    if (modoAtivo === 'pintura') {
-      cursor3D.position.set(snapCentroCelula(hit.point.x), 0.02, snapCentroCelula(hit.point.z));
-    } else {
-      cursor3D.position.set(px, 0.02, pz);
-    }
+    if (modoAtivo === 'pintura') { cursor3D.position.set(snapCentroCelula(hit.point.x), 0.02, snapCentroCelula(hit.point.z)); } 
+    else { cursor3D.position.set(px, 0.02, pz); }
     cursor3D.visible = true;
 
     if (arrastandoConstrucao && pontoA) {
-      if (modoAtivo === 'parede') {
+      const isCerca = (modoAtivo === 'cerca');
+      const hTemp = isCerca ? 1.0 : obterAltura(); // Cerca é sempre mais baixa
+      
+      if (modoAtivo === 'parede' || modoAtivo === 'cerca') {
         const dx = px - pontoA.x, dz = pz - pontoA.z;
         const comp = Math.sqrt(dx*dx + dz*dz) || 0.01;
-        previaMesh.scale.set(0.25, obterAltura(), comp + 0.25);
-        previaMesh.position.set((pontoA.x + px)/2, obterAltura()/2, (pontoA.z + pz)/2);
+        previaMesh.scale.set(0.25, hTemp, comp + 0.25);
+        previaMesh.position.set((pontoA.x + px)/2, hTemp/2, (pontoA.z + pz)/2);
         previaMesh.rotation.y = Math.atan2(dx, dz);
         previaMesh.visible = true;
       } else {
         const w = Math.abs(px - pontoA.x) || 0.1, d = Math.abs(pz - pontoA.z) || 0.1;
-        previaMesh.scale.set(w, obterAltura(), d);
-        previaMesh.position.set((pontoA.x + px)/2, obterAltura()/2, (pontoA.z + pz)/2);
-        previaMesh.rotation.y = 0; 
-        previaMesh.visible = true;
+        previaMesh.scale.set(w, hTemp, d);
+        previaMesh.position.set((pontoA.x + px)/2, hTemp/2, (pontoA.z + pz)/2);
+        previaMesh.rotation.y = 0; previaMesh.visible = true;
       }
     }
-  } else {
-    cursor3D.visible = false;
-  }
+  } else { cursor3D.visible = false; }
 });
 
 window.addEventListener('pointerup', e => {
@@ -228,48 +197,39 @@ window.addEventListener('pointerup', e => {
     if (hit) {
       const px = snapGrid(hit.point.x), pz = snapGrid(hit.point.z);
       if (Math.abs(px - pontoA.x) > 0.1 || Math.abs(pz - pontoA.z) > 0.1) {
-        if (modoAtivo === 'parede') criarLinhaDeParedes(pontoA.x, pontoA.z, px, pz, obterAltura());
+        if (modoAtivo === 'parede') criarLinhaDeParedes(pontoA.x, pontoA.z, px, pz, obterAltura(), false);
+        else if (modoAtivo === 'cerca') criarLinhaDeParedes(pontoA.x, pontoA.z, px, pz, 1.0, true);
         else if (modoAtivo === 'retangulo') criarRetangulo(pontoA.x, pontoA.z, px, pz, obterAltura());
         else if (modoAtivo === 'triangulo') criarTriangulo(pontoA.x, pontoA.z, px, pz, obterAltura());
         else if (modoAtivo === 'octogono') criarOctogono(pontoA.x, pontoA.z, px, pz, obterAltura());
       }
     }
-    arrastandoConstrucao = false;
-    pontoA = null;
-    previaMesh.visible = false;
+    arrastandoConstrucao = false; pontoA = null; previaMesh.visible = false;
   }
 });
 
-// ----------------------------------------------------
-// NOVA ARQUITETURA DE QUINAS (PILARES E SEGMENTOS)
-// ----------------------------------------------------
 function removerParede(parede) {
     scene.remove(parede.mesh);
     const idx = paredesConstruidas.indexOf(parede);
     if (idx > -1) paredesConstruidas.splice(idx, 1);
     limparPilaresSoltos();
 }
-
 function limparPilaresSoltos() {
     for (let i = pilaresConstruidos.length - 1; i >= 0; i--) {
         const pilar = pilaresConstruidos[i];
         const emUso = paredesConstruidas.some(p => p.pilarA === pilar || p.pilarB === pilar);
-        if (!emUso) {
-            scene.remove(pilar.mesh);
-            pilaresConstruidos.splice(i, 1);
-        }
+        if (!emUso) { scene.remove(pilar.mesh); pilaresConstruidos.splice(i, 1); }
     }
 }
 
-function obterOuCriarPilar(x, z, altura) {
+function obterOuCriarPilar(x, z, altura, isCerca) {
     let pilar = pilaresConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01);
     if (!pilar) {
-        const materiais = [
-            materialParede.clone(), materialParede.clone(), materialParede.clone(),
-            materialParede.clone(), materialParede.clone(), materialParede.clone()
-        ];
+        const mat = isCerca ? materialCerca : materialParede;
+        const materiais = [mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone()];
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, 0.25), materiais);
         mesh.position.set(x, altura / 2, z);
+        mesh.castShadow = true; mesh.receiveShadow = true; // SOMBRA
         scene.add(mesh);
         pilar = { mesh, x, z, altura };
         pilaresConstruidos.push(pilar);
@@ -277,200 +237,108 @@ function obterOuCriarPilar(x, z, altura) {
     return pilar;
 }
 
-function criarSegmentoParede(ax, az, bx, bz, altura) {
-  const existe = paredesConstruidas.find(p => 
-      (Math.abs(p.ax - ax) < 0.01 && Math.abs(p.az - az) < 0.01 && Math.abs(p.bx - bx) < 0.01 && Math.abs(p.bz - bz) < 0.01) ||
-      (Math.abs(p.ax - bx) < 0.01 && Math.abs(p.az - bz) < 0.01 && Math.abs(p.bx - ax) < 0.01 && Math.abs(p.bz - az) < 0.01)
-  );
+function criarSegmentoParede(ax, az, bx, bz, altura, isCerca) {
+  const existe = paredesConstruidas.find(p => (Math.abs(p.ax - ax) < 0.01 && Math.abs(p.az - az) < 0.01 && Math.abs(p.bx - bx) < 0.01 && Math.abs(p.bz - bz) < 0.01) || (Math.abs(p.ax - bx) < 0.01 && Math.abs(p.az - bz) < 0.01 && Math.abs(p.bx - ax) < 0.01 && Math.abs(p.bz - az) < 0.01));
   if (existe) return;
 
   const dx = bx - ax, dz = bz - az;
   const compTotal = Math.hypot(dx, dz);
   if (compTotal < 0.05) return;
   
-  const pilarA = obterOuCriarPilar(ax, az, altura);
-  const pilarB = obterOuCriarPilar(bx, bz, altura);
+  const pilarA = obterOuCriarPilar(ax, az, altura, isCerca);
+  const pilarB = obterOuCriarPilar(bx, bz, altura, isCerca);
 
   const compParede = Math.max(0.001, compTotal - 0.25);
-  const materiais = [
-    materialParede.clone(), materialParede.clone(), materialParede.clone(), 
-    materialParede.clone(), materialParede.clone(), materialParede.clone()
-  ];
+  const mat = isCerca ? materialCerca : materialParede;
+  const materiais = [mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone()];
 
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, compParede), materiais);
   mesh.position.set((ax+bx)/2, altura/2, (az+bz)/2);
   mesh.rotation.y = Math.atan2(dx, dz);
+  mesh.castShadow = true; mesh.receiveShadow = true; // SOMBRA
   scene.add(mesh);
-  paredesConstruidas.push({ mesh, ax, az, bx, bz, altura, isPorta: false, pilarA, pilarB });
+  
+  paredesConstruidas.push({ mesh, ax, az, bx, bz, altura, isPorta: false, isCerca, pilarA, pilarB });
 }
 
-function criarLinhaDeParedes(ax, az, bx, bz, altura) {
+function criarLinhaDeParedes(ax, az, bx, bz, altura, isCerca = false) {
   const dx = bx - ax, dz = bz - az;
   const compTotal = Math.hypot(dx, dz);
   if (compTotal < 0.05) return;
   const qtd = Math.max(1, Math.round(compTotal / configMapa.tamanhoGrid));
-  const stepX = dx / qtd;
-  const stepZ = dz / qtd;
-
-  for (let i = 0; i < qtd; i++) {
-    criarSegmentoParede(ax + stepX * i, az + stepZ * i, ax + stepX * (i + 1), az + stepZ * (i + 1), altura);
-  }
+  const stepX = dx / qtd, stepZ = dz / qtd;
+  for (let i = 0; i < qtd; i++) { criarSegmentoParede(ax + stepX * i, az + stepZ * i, ax + stepX * (i + 1), az + stepZ * (i + 1), altura, isCerca); }
 }
 
 function criarPoligonoDeParedes(vertices, altura) {
-  for (let i = 0; i < vertices.length; i++) {
-    criarLinhaDeParedes(vertices[i].x, vertices[i].z, vertices[(i + 1) % vertices.length].x, vertices[(i + 1) % vertices.length].z, altura);
-  }
+  for (let i = 0; i < vertices.length; i++) { criarLinhaDeParedes(vertices[i].x, vertices[i].z, vertices[(i + 1) % vertices.length].x, vertices[(i + 1) % vertices.length].z, altura, false); }
 }
+function criarRetangulo(x1, z1, x2, z2, altura) { const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2); criarPoligonoDeParedes([{ x: minX, z: minZ }, { x: maxX, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura); }
+function criarTriangulo(x1, z1, x2, z2, altura) { const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2); criarPoligonoDeParedes([{ x: (minX + maxX) / 2, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura); }
+function criarOctogono(x1, z1, x2, z2, altura) { const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2); const w = maxX - minX, d = maxZ - minZ, offX = w * 0.3, offZ = d * 0.3; criarPoligonoDeParedes([{ x: minX + offX, z: minZ }, { x: maxX - offX, z: minZ }, { x: maxX, z: minZ + offZ }, { x: maxX, z: maxZ - offZ }, { x: maxX - offX, z: maxZ }, { x: minX + offX, z: maxZ }, { x: minX, z: maxZ - offZ }, { x: minX, z: minZ + offZ }], altura); }
 
-function criarRetangulo(x1, z1, x2, z2, altura) {
-  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
-  criarPoligonoDeParedes([{ x: minX, z: minZ }, { x: maxX, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura);
-}
-
-function criarTriangulo(x1, z1, x2, z2, altura) {
-  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
-  criarPoligonoDeParedes([{ x: (minX + maxX) / 2, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura);
-}
-
-function criarOctogono(x1, z1, x2, z2, altura) {
-  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
-  const w = maxX - minX, d = maxZ - minZ, offX = w * 0.3, offZ = d * 0.3;
-  criarPoligonoDeParedes([
-    { x: minX + offX, z: minZ }, { x: maxX - offX, z: minZ }, { x: maxX, z: minZ + offZ }, { x: maxX, z: maxZ - offZ },
-    { x: maxX - offX, z: maxZ }, { x: minX + offX, z: maxZ }, { x: minX, z: maxZ - offZ }, { x: minX, z: minZ + offZ }
-  ], altura);
-}
-
-// ----------------------------------------------------
-// LÓGICA MATEMÁTICA DE MAPEAMENTO UV PARA TEXTURAS
-// ----------------------------------------------------
 function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) {
   const mat = new THREE.MeshLambertMaterial();
-  if (item.tipo === 'cor') {
-    mat.color.set(item.cor);
-  } else {
-    const tex = item.textura.clone();
-    tex.needsUpdate = true;
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(repeatX, repeatY);
-    mat.map = tex;
-    mat.color.set(0xffffff);
-  }
+  if (item.tipo === 'cor') { mat.color.set(item.cor); } 
+  else { const tex = item.textura.clone(); tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(repeatX, repeatY); mat.map = tex; mat.color.set(0xffffff); }
   return mat;
 }
-
 function aplicarMaterialNaFace(mesh, faceIndex, item) {
   let repeatX = 1, repeatY = 1;
-  
   if (mesh.geometry && mesh.geometry.parameters) {
       const { width, height, depth } = mesh.geometry.parameters;
-      if (faceIndex === 0 || faceIndex === 1) { 
-          repeatX = depth; repeatY = height;
-      } else if (faceIndex === 2 || faceIndex === 3) { 
-          repeatX = width; repeatY = depth;
-      } else if (faceIndex === 4 || faceIndex === 5) { 
-          repeatX = width; repeatY = height;
-      }
+      if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } 
+      else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } 
+      else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; }
   }
-
-  const novosMateriais = [...mesh.material]; 
-  novosMateriais[faceIndex] = gerarMaterialPintura(item, repeatX, repeatY);
-  mesh.material = novosMateriais;
+  const novosMateriais = [...mesh.material]; novosMateriais[faceIndex] = gerarMaterialPintura(item, repeatX, repeatY); mesh.material = novosMateriais;
 }
-
 function pintarFacePorNormalMundial(mesh, targetNormal, item) {
     const tNorm = targetNormal.clone().normalize();
-    const localNormals = [
-        new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0),
-        new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0),
-        new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)
-    ];
-    for (let i = 0; i < 6; i++) {
-        const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize();
-        if (worldNormal.dot(tNorm) > 0.5) {
-            aplicarMaterialNaFace(mesh, i, item);
-        }
-    }
+    const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
+    for (let i = 0; i < 6; i++) { const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); if (worldNormal.dot(tNorm) > 0.5) aplicarMaterialNaFace(mesh, i, item); }
 }
-
 function aplicarPiso(x, z, item) {
   let tile = pisosConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01);
   if (!tile) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, 0.12, configMapa.tamanhoGrid), materialPiso.clone());
     mesh.position.set(x, 0.06, z);
+    mesh.receiveShadow = true; // PISO RECEBE SOMBRA
     scene.add(mesh);
-    tile = { mesh, x, z };
-    pisosConstruidos.push(tile);
+    tile = { mesh, x, z }; pisosConstruidos.push(tile);
   }
   tile.mesh.material = gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid);
 }
 
-// ----------------------------------------------------
-// ALGORITMO DE FLOOD FILL (LIMITADO AO TABULEIRO)
-// ----------------------------------------------------
 function distanciaPontoSegmento(px, pz, ax, az, bx, bz) {
-  const compSq = (bx-ax)**2 + (bz-az)**2;
-  if (compSq === 0) return Math.hypot(px-ax, pz-az);
-  let t = Math.max(0, Math.min(1, ((px-ax)*(bx-ax) + (pz-az)*(bz-az)) / compSq));
-  return Math.hypot(px - (ax + t*(bx-ax)), pz - (az + t*(bz-az)));
+  const compSq = (bx-ax)**2 + (bz-az)**2; if (compSq === 0) return Math.hypot(px-ax, pz-az);
+  let t = Math.max(0, Math.min(1, ((px-ax)*(bx-ax) + (pz-az)*(bz-az)) / compSq)); return Math.hypot(px - (ax + t*(bx-ax)), pz - (az + t*(bz-az)));
 }
-
 function paredeQueBloqueia(x1, z1, x2, z2) {
   const midX = (x1+x2)/2, midZ = (z1+z2)/2;
-  return paredesConstruidas.find(p => {
-    return distanciaPontoSegmento(midX, midZ, p.ax, p.az, p.bx, p.bz) < 0.2;
-  }) || null;
+  return paredesConstruidas.find(p => !p.isCerca && distanciaPontoSegmento(midX, midZ, p.ax, p.az, p.bx, p.bz) < 0.2) || null; // CERCAS NÃO BLOQUEIAM TINTA
 }
-
 function encontrarAreaFechada(xInicial, zInicial) {
-  const visitados = new Set();
-  const pilha = [{ x: xInicial, z: zInicial }];
-  const celulas = [];
-  
-  // LÊ DINAMICAMENTE O TAMANHO DO MAPA ESCOLHIDO PELO MESTRE
-  const limiteX = configMapa.largura / 2;
-  const limiteZ = configMapa.profundidade / 2;
-  
+  const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = [];
+  const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2;
   while (pilha.length && celulas.length < 50000) {
-    const atual = pilha.pop();
-    const chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`;
-    
-    if (visitados.has(chave)) continue;
-    visitados.add(chave);
-    
-    // BLOQUEIO PERFEITO: Para a tinta na borda do mapa
+    const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`;
+    if (visitados.has(chave)) continue; visitados.add(chave);
     if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; 
-    
     celulas.push(atual);
-    
     [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => {
-      const vx = atual.x + dx * configMapa.tamanhoGrid;
-      const vz = atual.z + dz * configMapa.tamanhoGrid;
-      if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) {
-        pilha.push({ x: vx, z: vz });
-      }
+      const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid;
+      if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz });
     });
   }
   return { celulas };
 }
 
-// ----------------------------------------------------
-// CONTROLE DE VISÃO DE PAREDES (SIMS STYLE)
-// ----------------------------------------------------
 export function mudarVisaoParedes(modo) {
   const aplicar = (p) => {
-     if (modo === 'full') {
-        p.mesh.scale.y = 1; p.mesh.position.y = p.altura / 2;
-        if(Array.isArray(p.mesh.material)) p.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; });
-     } else if (modo === 'cut') {
-        p.mesh.scale.y = 1; p.mesh.position.y = p.altura / 2;
-        if(Array.isArray(p.mesh.material)) p.mesh.material.forEach(m => { m.transparent = true; m.opacity = 0.3; });
-     } else if (modo === 'low') {
-        p.mesh.scale.y = 0.1; p.mesh.position.y = (p.altura * 0.1) / 2;
-        if(Array.isArray(p.mesh.material)) p.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; });
-     }
+     if (modo === 'full') { p.mesh.scale.y = 1; p.mesh.position.y = p.altura / 2; if(Array.isArray(p.mesh.material)) p.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; }); } 
+     else if (modo === 'cut') { p.mesh.scale.y = 1; p.mesh.position.y = p.altura / 2; if(Array.isArray(p.mesh.material)) p.mesh.material.forEach(m => { m.transparent = true; m.opacity = 0.3; }); } 
+     else if (modo === 'low') { p.mesh.scale.y = 0.1; p.mesh.position.y = (p.altura * 0.1) / 2; if(Array.isArray(p.mesh.material)) p.mesh.material.forEach(m => { m.transparent = false; m.opacity = 1; }); }
   };
-  paredesConstruidas.forEach(aplicar);
-  pilaresConstruidos.forEach(aplicar);
+  paredesConstruidas.forEach(aplicar); pilaresConstruidos.forEach(aplicar);
 }
