@@ -16,10 +16,8 @@
   <div id="hint">Navegação isométrica: Botão do Meio (arrastar) ou Scroll (zoom)</div>
   <div id="fpsbadge"></div>
   
-  <!-- MEDIDOR DE CURSOR DINÂMICO -->
   <div id="cursor-medida" style="display:none; position:absolute; color:#fff; background:rgba(0,0,0,0.8); border:1px solid #38bdf8; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:bold; pointer-events:none; z-index:9999; box-shadow: 0 4px 6px rgba(0,0,0,0.5);"></div>
 
-  <!-- POPUP FLUTUANTE (GIZMO THE SIMS 4) -->
   <div id="room-gizmo" style="display: none; position: absolute; padding: 6px; background: rgba(15, 23, 32, 0.9); backdrop-filter: blur(8px); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 12px; gap: 6px; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
     <button class="tool-btn" id="gizmoMove" title="Mover" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">✥</button>
     <button class="tool-btn" id="gizmoRotLeft" title="Girar Esquerda" style="width: 36px; height: 36px; font-size: 16px; margin: 0;">↶</button>
@@ -31,7 +29,6 @@
     <button class="tool-btn" id="gizmoDelete" title="Deletar" style="width: 36px; height: 36px; font-size: 16px; margin: 0; background: rgba(255,50,50,0.2); border-color: #ff4444;">🗑️</button>
   </div>
 
-  <!-- HUD Câmera The Sims -->
   <div id="sims-camera-controls" class="glass-panel">
     <div class="cam-row">
       <button class="cam-btn" id="camRotLeft" title="Girar Esquerda">↶</button>
@@ -50,7 +47,6 @@
     </div>
   </div>
 
-  <!-- HUD Principal The Sims -->
   <div id="sims-hud">
     <div id="sims-node">
       <button class="node-btn active" data-target="panel-construcao" title="Construção">🏗️</button>
@@ -62,36 +58,31 @@
     <div id="sims-panel" class="glass-panel">
       <!-- ABA 1: CONSTRUÇÃO -->
       <div id="panel-construcao" class="sub-panel active">
-        
         <div class="tool-group">
           <button class="tool-btn" id="btnDesfazer" title="Desfazer (Ctrl+Z)" style="background: rgba(255,255,255,0.1);">↩️</button>
           <button class="tool-btn" id="btnRefazer" title="Refazer (Ctrl+Shift+Z)" style="background: rgba(255,255,255,0.1);">↪️</button>
           <div class="divider"></div>
-          
           <button class="tool-btn" id="btnModoParede" title="Parede (Arraste para criar. Ctrl+Arraste = Marreta)">🧱</button>
           <button class="tool-btn" id="btnModoCerca" title="Cerca (Delimita sem fechar cômodo)">🚧</button>
           <button class="tool-btn" id="btnModoRetangulo" title="Sala Retangular (Arraste)">⬜</button>
           <button class="tool-btn" id="btnModoTriangulo" title="Sala Triangular (Arraste)">🔺</button>
           <button class="tool-btn" id="btnModoOctogono" title="Sala Octogonal (Arraste)">🛑</button>
           <button class="tool-btn" id="btnModoPorta" title="Portas/Janelas (Gruda na Parede)">🚪</button>
-          <button class="tool-btn" id="btnModoPintura" title="Pintura (Shift = Tudo, Ctrl = Borracha, Alt = Conta-gotas)">🎨</button>
+          <button class="tool-btn" id="btnModoPintura" title="Pintura (Shift = Tudo, Ctrl = Remover, Alt = Pipeta)">🎨</button>
           <button class="tool-btn ativo" id="btnSairModo" title="Navegar / Selecionar">🖐️</button>
         </div>
-        
         <div class="tool-group" style="margin-top: 8px;">
           <button class="tool-btn" id="btnModoEscada" title="Escadas (Arraste para definir a direção)">🪜</button>
           <button class="tool-btn" id="btnModoColuna" title="Coluna de Sustentação (Apoie varandas)">🏛️</button>
           <button class="tool-btn" id="btnModoTelhado" title="Telhados (Em breve)" style="opacity: 0.5;">🏠</button>
           <button class="tool-btn" id="btnModoTerreno" title="Paisagismo (Em breve)" style="opacity: 0.5;">🌳</button>
         </div>
-        
         <div class="divider"></div>
         <div class="tool-group small-inputs">
           <div class="campoSims">Altura <input type="number" id="inputAlturaParede" value="3" min="0.5" max="10" step="0.5"></div>
           <div class="campoSims">Grid <input type="number" id="inputTamanhoGrid" value="1" min="0.25" max="4" step="0.25"></div>
         </div>
         <div class="divider"></div>
-        
         <div id="paletaSecao">
           <div id="paletaBotoes">
             <button id="btnAdicionarTextura" title="Subir Imagem">🖼️</button>
@@ -103,7 +94,7 @@
         </div>
       </div>
 
-      <!-- ABA 2: TABULEIRO -->
+      <!-- ABA 2: TABULEIRO (Agora com Gestão de Salvar/Carregar) -->
       <div id="panel-tabuleiro" class="sub-panel">
         <div class="hud-section">
           <h3>Tamanho do Tabuleiro</h3>
@@ -118,6 +109,16 @@
           <button class="wide" id="btnRedimensionarMapa" style="margin-top: 10px; border-color: #38bdf8; background: rgba(56,189,248,0.2); color: #38bdf8;">
             📐 Aplicar Novo Tamanho
           </button>
+        </div>
+        
+        <div class="divider"></div>
+        
+        <div class="hud-section">
+          <h3>Gestão de Projeto</h3>
+          <button class="wide" id="btnSalvarMapa" style="border-color: #4ade80; background: rgba(74, 222, 128, 0.2); color: #4ade80;">💾 Exportar Mapa (.json)</button>
+          <button class="wide" id="btnCarregarMapa" style="border-color: #facc15; background: rgba(250, 204, 21, 0.2); color: #facc15;">📂 Importar Mapa</button>
+          <input type="file" id="inputCarregarMapa" accept=".json" style="display:none;">
+          <button class="wide" id="btnLimparMapa" style="margin-top: 12px; border-color: #ff4444; background: rgba(255, 68, 68, 0.2); color: #ff4444;">💣 Demolir Tudo</button>
         </div>
       </div>
 

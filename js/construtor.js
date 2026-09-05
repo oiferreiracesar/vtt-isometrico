@@ -1,4 +1,4 @@
-// js/construtor.js - Múltiplos Andares, Gizmo e FOG OF WAR (Profundidade)
+// js/construtor.js - Múltiplos Andares, Gizmo, Fog of War e SISTEMA DE SAVE/LOAD
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
@@ -37,7 +37,6 @@ grupoSetas.visible = false;
 grupoSetas.renderOrder = 999; 
 scene.add(grupoSetas);
 
-// --- O VÉU DA PROFUNDIDADE (FOG OF WAR INFERIOR) ---
 const matFog = new THREE.MeshBasicMaterial({ color: 0x05080c, transparent: true, opacity: 0.65, depthWrite: false });
 const fogAndares = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), matFog);
 fogAndares.rotation.x = -Math.PI / 2;
@@ -46,6 +45,94 @@ scene.add(fogAndares);
 const historicoUndo = [];
 const historicoRedo = [];
 let acaoAtual = null;
+
+// =========================================================================
+// SISTEMA DE SALVAR, CARREGAR E DEMOLIR MAPA
+// =========================================================================
+export function limparMapa() {
+    [...paredesConstruidas, ...pilaresConstruidos, ...pisosConstruidos, ...colunasSustentacao].forEach(obj => {
+        scene.remove(obj.mesh);
+    });
+    escadasConstruidas.forEach(e => scene.remove(e.mesh));
+
+    paredesConstruidas.length = 0;
+    pilaresConstruidos.length = 0;
+    pisosConstruidos.length = 0;
+    colunasSustentacao.length = 0;
+    escadasConstruidas.length = 0;
+    comodosConstruidos.length = 0;
+
+    historicoUndo.length = 0;
+    historicoRedo.length = 0;
+    
+    setModoAtivo(null);
+    atualizarVisibilidadeAndares();
+    showAviso("Tabuleiro completamente limpo!");
+}
+
+export function exportarMapa() {
+    // Escaneia a matemática do mapa ignorando os pesos visuais do 3D
+    const dados = {
+        versao: 1,
+        paredes: paredesConstruidas.map(p => ({ ax: p.ax, az: p.az, bx: p.bx, bz: p.bz, altura: p.altura, isCerca: p.isCerca, comodoId: p.comodoId, nivel: p.nivel, isPorta: p.isPorta })),
+        pisos: pisosConstruidos.map(p => ({ x: p.x, z: p.z, nivel: p.nivel })),
+        escadas: escadasConstruidas.map(e => ({ ax: e.ax, az: e.az, bx: e.bx, bz: e.bz, alturaAndar: e.alturaAndar, largura: e.largura, nivel: e.nivel })),
+        colunas: colunasSustentacao.map(c => ({ x: c.x, z: c.z, altura: c.altura, nivel: c.nivel }))
+    };
+    
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dados));
+    const downloadNode = document.createElement('a');
+    downloadNode.setAttribute("href", dataStr);
+    downloadNode.setAttribute("download", "masmorra.json");
+    document.body.appendChild(downloadNode); 
+    downloadNode.click();
+    downloadNode.remove();
+    showAviso("Projeto exportado com sucesso!");
+}
+
+export function importarMapa(dados) {
+    limparMapa();
+    const nivelOriginal = configsCamera.nivel;
+    const defaultPiso = { tipo: 'cor', cor: '#8a7550' }; // Planta baixa padrão
+
+    if(dados.pisos) {
+        dados.pisos.forEach(p => {
+            configsCamera.nivel = p.nivel;
+            aplicarPiso(p.x, p.z, defaultPiso);
+        });
+    }
+    if(dados.paredes) {
+        dados.paredes.forEach(p => {
+            configsCamera.nivel = p.nivel;
+            criarSegmentoParede(p.ax, p.az, p.bx, p.bz, p.altura, p.isCerca, p.comodoId);
+            if (p.isPorta) {
+                const wall = paredesConstruidas[paredesConstruidas.length - 1];
+                wall.isPorta = true;
+                const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 });
+                wall.mesh.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta];
+            }
+        });
+    }
+    if(dados.escadas) {
+        dados.escadas.forEach(e => {
+            configsCamera.nivel = e.nivel;
+            criarEscada(e.ax, e.az, e.bx, e.bz, e.alturaAndar, e.largura);
+        });
+    }
+    if(dados.colunas) {
+        dados.colunas.forEach(c => {
+            configsCamera.nivel = c.nivel;
+            criarColunaSustentacao(c.x, c.z, c.altura);
+        });
+    }
+
+    configsCamera.nivel = nivelOriginal;
+    historicoUndo.length = 0; // Limpa ações fantasmas que geraram no load
+    acaoAtual = null;
+    atualizarVisibilidadeAndares();
+    showAviso("Projeto carregado com sucesso!");
+}
+// =========================================================================
 
 function iniciarAcao() { acaoAtual = { add: [], rem: [], paint: [], move: [] }; }
 function finalizarAcao() {
@@ -483,7 +570,7 @@ canvas?.addEventListener('pointermove', e => {
           if (!pontoA) pontoA = { x: atualX, z: atualZ }; 
           const dx = atualX - pontoA.x, dz = atualZ - pontoA.z; pontoA = { x: atualX, z: atualZ }; 
           
-          if (comodoSelecionado) aplicarMovimentoComodo(comodoSelecionado, dx, dz); 
+          if (comodoSelecionado) aplicarMovimento(comodoSelecionado, dx, dz); 
           else if (escadaSelecionada) {
               escadaSelecionada.ax += dx; escadaSelecionada.az += dz;
               escadaSelecionada.bx += dx; escadaSelecionada.bz += dz;
@@ -567,7 +654,7 @@ window.addEventListener('pointerup', e => {
   finalizarAcao(); 
 });
 
-function aplicarMovimentoComodo(comodo, dx, dz) {
+function aplicarMovimento(comodo, dx, dz) {
     comodo.paredes.forEach(p => { p.ax += dx; p.az += dz; p.bx += dx; p.bz += dz; p.mesh.position.x += dx; p.mesh.position.z += dz; });
     comodo.pilares.forEach(p => { p.x += dx; p.z += dz; p.mesh.position.x += dx; p.mesh.position.z += dz; });
 }
@@ -671,9 +758,6 @@ function executarMarreta(hitObject) {
   if (escada) { removerObjetoMundo('escada', escada, escadasConstruidas); return; }
 }
 
-// ----------------------------------------------------
-// PINTURA E REMOÇÃO DE PINTURA (BORRACHA)
-// ----------------------------------------------------
 function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) { const mat = new THREE.MeshLambertMaterial(); if (item.tipo === 'cor') { mat.color.set(item.cor); } else { const tex = item.textura.clone(); tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(repeatX, repeatY); mat.map = tex; mat.color.set(0xffffff); } return mat; }
 function aplicarMaterialNaFace(mesh, faceIndex, item) { registrarPintura(mesh); let repeatX = 1, repeatY = 1; if (mesh.geometry && mesh.geometry.parameters) { const { width, height, depth } = mesh.geometry.parameters; if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; } } const novosMateriais = [...mesh.material]; novosMateriais[faceIndex] = gerarMaterialPintura(item, repeatX, repeatY); mesh.material = novosMateriais; finalizarPintura(mesh); }
 function pintarFacePorNormalMundial(mesh, targetNormal, item) { const tNorm = targetNormal.clone().normalize(); const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)]; for (let i = 0; i < 6; i++) { const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); if (worldNormal.dot(tNorm) > 0.5) aplicarMaterialNaFace(mesh, i, item); } }
@@ -685,9 +769,6 @@ function distanciaPontoSegmento(px, pz, ax, az, bx, bz) { const compSq = (bx-ax)
 function paredeQueBloqueia(x1, z1, x2, z2) { const midX = (x1+x2)/2, midZ = (z1+z2)/2; return paredesConstruidas.find(p => p.nivel === configsCamera.nivel && !p.isCerca && distanciaPontoSegmento(midX, midZ, p.ax, p.az, p.bx, p.bz) < 0.2) || null; }
 function encontrarAreaFechada(xInicial, zInicial) { const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = []; const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2; while (pilha.length && celulas.length < 50000) { const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`; if (visitados.has(chave)) continue; visitados.add(chave); if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; celulas.push(atual); [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => { const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid; if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz }); }); } return { celulas }; }
 
-// ----------------------------------------------------
-// GERENCIADOR DE VISIBILIDADE 
-// ----------------------------------------------------
 function setOpacity(mesh, isTransparent, opacity) { 
     if (!mesh) return; 
     if (mesh.type === 'Group') { 
@@ -715,9 +796,7 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
       meshChaoMasmorra.position.y = alturaAtual - 0.01; 
   }
   
-  // A MÁGICA DO VÉU DA PROFUNDIDADE (FOG DE ANDAR)
   fogAndares.position.y = alturaAtual - 0.02; 
-  
   if (gridHelper) gridHelper.position.y = alturaAtual + 0.01;
 
   const aplicarParede = (obj) => { 
@@ -739,7 +818,6 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
   [pisosConstruidos, escadasConstruidas].forEach(arr => { 
       arr.forEach(obj => { 
           if (obj.nivel > configsCamera.nivel) { 
-              // O HOLOGRAMA DO ANDAR DE CIMA (FOG SUPERIOR)
               obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.35); 
           } else { 
               obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); 

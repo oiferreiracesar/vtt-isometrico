@@ -1,5 +1,5 @@
-// js/ui.js - Gerenciamento da Interface HTML (Com Suporte a Dungeons/Subsolos)
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarLarguraEscada } from './construtor.js';
+// js/ui.js - Gerenciamento da Interface HTML (Com Sistema de Salvar/Carregar)
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarLarguraEscada, exportarMapa, importarMapa, limparMapa } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
 
@@ -41,12 +41,8 @@ export function selecionarMaterialNaPaleta(matAlvo) {
       match = paleta.find(p => p.tipo === 'cor' && p.cor.toLowerCase() === hex.toLowerCase());
   }
   if (match) {
-      idPaletaSelecionada = match.id;
-      renderizarPaleta();
-      showAviso("🎨 Pipeta: Textura copiada para o balde!");
-  } else {
-      showAviso("Material não encontrado na paleta base.");
-  }
+      idPaletaSelecionada = match.id; renderizarPaleta(); showAviso("🎨 Pipeta: Textura copiada para o balde!");
+  } else { showAviso("Material não encontrado na paleta base."); }
 }
 
 function renderizarPaleta() {
@@ -117,6 +113,33 @@ export function iniciarUI() {
     });
   });
 
+  // --- BOTÕES DE SALVAR, CARREGAR E LIMPAR ---
+  document.getElementById('btnSalvarMapa')?.addEventListener('click', exportarMapa);
+  
+  document.getElementById('btnCarregarMapa')?.addEventListener('click', () => document.getElementById('inputCarregarMapa').click());
+  document.getElementById('inputCarregarMapa')?.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+          try {
+              const dados = JSON.parse(ev.target.result);
+              importarMapa(dados);
+          } catch(err) {
+              showAviso("Erro ao ler o arquivo. O mapa pode estar corrompido.");
+              console.error(err);
+          }
+      };
+      reader.readAsText(file);
+      e.target.value = ''; // Reseta para permitir carregar o mesmo arquivo depois
+  });
+
+  document.getElementById('btnLimparMapa')?.addEventListener('click', () => {
+      if(confirm("Tem certeza que deseja demolir TODO O TABULEIRO? Isso não pode ser desfeito!")) {
+          limparMapa();
+      }
+  });
+
   document.getElementById('btnDesfazer')?.addEventListener('click', desfazer);
   document.getElementById('btnRefazer')?.addEventListener('click', refazer);
 
@@ -152,18 +175,13 @@ export function iniciarUI() {
   document.getElementById('camRotLeft')?.addEventListener('click', () => { configsCamera.angulo -= Math.PI / 2; atualizarCamera(); });
   document.getElementById('camRotRight')?.addEventListener('click', () => { configsCamera.angulo += Math.PI / 2; atualizarCamera(); });
   
-  // --- MÁGICA DOS SUBSOLOS (Liberação das amarras do nível 0) ---
   document.getElementById('camUp')?.addEventListener('click', () => { 
-      configsCamera.nivel += 1; 
-      atualizarCamera(); 
-      atualizarVisibilidadeAndares(); 
+      configsCamera.nivel += 1; atualizarCamera(); atualizarVisibilidadeAndares(); 
       showAviso(configsCamera.nivel === 0 ? `Subiu para o Térreo.` : (configsCamera.nivel > 0 ? `Subiu para o Nível ${configsCamera.nivel}.` : `Subiu para o Subsolo ${Math.abs(configsCamera.nivel)}.`)); 
   });
   
   document.getElementById('camDown')?.addEventListener('click', () => { 
-      configsCamera.nivel -= 1; // Agora o céu e o inferno são o limite!
-      atualizarCamera(); 
-      atualizarVisibilidadeAndares(); 
+      configsCamera.nivel -= 1; atualizarCamera(); atualizarVisibilidadeAndares(); 
       showAviso(configsCamera.nivel === 0 ? `Desceu para o Térreo.` : (configsCamera.nivel > 0 ? `Desceu para o Nível ${configsCamera.nivel}.` : `Desceu para o Subsolo ${Math.abs(configsCamera.nivel)}.`)); 
   });
 
