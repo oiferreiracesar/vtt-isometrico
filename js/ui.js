@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML e Paleta
+// js/ui.js - Gerenciamento da Interface HTML (Com Blindagem de Erros)
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -23,6 +23,7 @@ export function itemSelecionadoAtual() { return paleta.find(p => p.id === idPale
 
 function renderizarPaleta() {
   const div = document.getElementById('paletaTexturas');
+  if (!div) return;
   div.innerHTML = '';
   if (!paleta.length) { div.innerHTML = '<span class="paletaVazia">Carregando Banco de Assets...</span>'; return; }
   paleta.forEach(item => {
@@ -52,8 +53,9 @@ function carregarBancoDeAssets() {
 export function iniciarUI() {
   carregarBancoDeAssets();
 
-  document.getElementById('btnAdicionarTextura').addEventListener('click', () => document.getElementById('inputAdicionarTextura').click());
-  document.getElementById('inputAdicionarTextura').addEventListener('change', e => {
+  // Uso de ?. (Optional Chaining) impede que a engine congele se algum botão não existir no HTML!
+  document.getElementById('btnAdicionarTextura')?.addEventListener('click', () => document.getElementById('inputAdicionarTextura').click());
+  document.getElementById('inputAdicionarTextura')?.addEventListener('change', e => {
     Array.from(e.target.files || []).forEach(arquivo => {
       const leitor = new FileReader();
       leitor.onload = ev => {
@@ -64,7 +66,7 @@ export function iniciarUI() {
     });
   });
 
-  document.getElementById('btnAdicionarCor').addEventListener('click', () => {
+  document.getElementById('btnAdicionarCor')?.addEventListener('click', () => {
     const cor = document.getElementById('inputCorNova').value; const id = proximoIdPaleta++; paleta.push({ id, tipo: 'cor', cor });
     if (idPaletaSelecionada === null) idPaletaSelecionada = id; renderizarPaleta(); showAviso(`Cor adicionada.`);
   });
@@ -79,55 +81,63 @@ export function iniciarUI() {
   }
 
   const simsPanel = document.getElementById('sims-panel');
-  simsPanel.style.display = 'flex'; 
+  if(simsPanel) simsPanel.style.display = 'flex'; 
 
   document.querySelectorAll('.node-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const isAlreadyActive = btn.classList.contains('active');
       document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.sub-panel').forEach(panel => panel.classList.remove('active'));
-      if (isAlreadyActive) { simsPanel.style.display = 'none'; ativarFerramenta('btnSairModo', null, 'Menu recolhido.'); } 
-      else { btn.classList.add('active'); document.getElementById(btn.getAttribute('data-target')).classList.add('active'); simsPanel.style.display = 'flex'; }
+      if (isAlreadyActive) { 
+          if(simsPanel) simsPanel.style.display = 'none'; 
+          ativarFerramenta('btnSairModo', null, 'Menu recolhido.'); 
+      } 
+      else { 
+          btn.classList.add('active'); 
+          const target = document.getElementById(btn.getAttribute('data-target'));
+          if (target) target.classList.add('active'); 
+          if(simsPanel) simsPanel.style.display = 'flex'; 
+      }
     });
   });
 
   // BOTÕES DE HISTÓRICO
-  document.getElementById('btnDesfazer').addEventListener('click', desfazer);
-  document.getElementById('btnRefazer').addEventListener('click', refazer);
+  document.getElementById('btnDesfazer')?.addEventListener('click', desfazer);
+  document.getElementById('btnRefazer')?.addEventListener('click', refazer);
 
   // FERRAMENTAS
-  document.getElementById('btnModoSelecao').addEventListener('click', () => ativarFerramenta('btnModoSelecao', 'selecao', 'Seleção: Clique e segure para Mover o cômodo pelo mapa.'));
-  document.getElementById('btnModoParede').addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
-  document.getElementById('btnModoCerca').addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
-  document.getElementById('btnModoRetangulo').addEventListener('click', () => ativarFerramenta('btnModoRetangulo', 'retangulo', 'Sala Retangular: Clique e arraste.'));
-  document.getElementById('btnModoTriangulo').addEventListener('click', () => ativarFerramenta('btnModoTriangulo', 'triangulo', 'Sala Triangular: Clique e arraste.'));
-  document.getElementById('btnModoOctogono').addEventListener('click', () => ativarFerramenta('btnModoOctogono', 'octogono', 'Sala Octogonal: Clique e arraste.'));
-  document.getElementById('btnModoPorta').addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
-  document.getElementById('btnModoPintura').addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo, Ctrl = Remover)'));
+  document.getElementById('btnModoSelecao')?.addEventListener('click', () => ativarFerramenta('btnModoSelecao', 'selecao', 'Seleção: Clique e segure para Mover o cômodo pelo mapa.'));
+  document.getElementById('btnModoParede')?.addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
+  document.getElementById('btnModoCerca')?.addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
+  document.getElementById('btnModoRetangulo')?.addEventListener('click', () => ativarFerramenta('btnModoRetangulo', 'retangulo', 'Sala Retangular: Clique e arraste.'));
+  document.getElementById('btnModoTriangulo')?.addEventListener('click', () => ativarFerramenta('btnModoTriangulo', 'triangulo', 'Sala Triangular: Clique e arraste.'));
+  document.getElementById('btnModoOctogono')?.addEventListener('click', () => ativarFerramenta('btnModoOctogono', 'octogono', 'Sala Octogonal: Clique e arraste.'));
+  document.getElementById('btnModoPorta')?.addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
+  document.getElementById('btnModoPintura')?.addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo, Ctrl = Remover)'));
   
-  document.getElementById('btnModoEscada').addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada: Arraste para o sentido que ela sobe.'));
-  document.getElementById('btnModoColuna').addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  document.getElementById('btnSairModo').addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Modo de Navegação livre.'));
+  document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada: Arraste para o sentido que ela sobe.'));
+  document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
+  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Modo de Navegação livre.'));
 
   const botoesFuturos = ['btnModoTelhado', 'btnModoTerreno'];
-  botoesFuturos.forEach(id => { document.getElementById(id).addEventListener('click', () => showAviso("Em breve!")); });
+  botoesFuturos.forEach(id => { document.getElementById(id)?.addEventListener('click', () => showAviso("Em breve!")); });
 
-  document.getElementById('btnRedimensionarMapa').addEventListener('click', () => {
+  document.getElementById('btnRedimensionarMapa')?.addEventListener('click', () => {
     const w = parseInt(document.getElementById('inputMapaX').value) || 32, d = parseInt(document.getElementById('inputMapaZ').value) || 18;
     redimensionarMapa(w, d); showAviso(`Tabuleiro redimensionado para ${w}x${d}.`);
   });
 
-  document.getElementById('camZoomIn').addEventListener('click', () => { configsCamera.zoom = Math.min(8, configsCamera.zoom + 0.5); atualizarCamera(); });
-  document.getElementById('camZoomOut').addEventListener('click', () => { configsCamera.zoom = Math.max(0.2, configsCamera.zoom - 0.5); atualizarCamera(); });
-  document.getElementById('camRotLeft').addEventListener('click', () => { configsCamera.angulo -= Math.PI / 2; atualizarCamera(); });
-  document.getElementById('camRotRight').addEventListener('click', () => { configsCamera.angulo += Math.PI / 2; atualizarCamera(); });
+  document.getElementById('camZoomIn')?.addEventListener('click', () => { configsCamera.zoom = Math.min(8, configsCamera.zoom + 0.5); atualizarCamera(); });
+  document.getElementById('camZoomOut')?.addEventListener('click', () => { configsCamera.zoom = Math.max(0.2, configsCamera.zoom - 0.5); atualizarCamera(); });
+  document.getElementById('camRotLeft')?.addEventListener('click', () => { configsCamera.angulo -= Math.PI / 2; atualizarCamera(); });
+  document.getElementById('camRotRight')?.addEventListener('click', () => { configsCamera.angulo += Math.PI / 2; atualizarCamera(); });
   
-  document.getElementById('camUp').addEventListener('click', () => { configsCamera.nivel += 1; atualizarCamera(); atualizarVisibilidadeAndares(); showAviso(`Subiu para o Nível ${configsCamera.nivel}.`); });
-  document.getElementById('camDown').addEventListener('click', () => { configsCamera.nivel = Math.max(0, configsCamera.nivel - 1); atualizarCamera(); atualizarVisibilidadeAndares(); showAviso(configsCamera.nivel === 0 ? `Desceu para o Térreo.` : `Desceu para o Nível ${configsCamera.nivel}.`); });
+  document.getElementById('camUp')?.addEventListener('click', () => { configsCamera.nivel += 1; atualizarCamera(); atualizarVisibilidadeAndares(); showAviso(`Subiu para o Nível ${configsCamera.nivel}.`); });
+  document.getElementById('camDown')?.addEventListener('click', () => { configsCamera.nivel = Math.max(0, configsCamera.nivel - 1); atualizarCamera(); atualizarVisibilidadeAndares(); showAviso(configsCamera.nivel === 0 ? `Desceu para o Térreo.` : `Desceu para o Nível ${configsCamera.nivel}.`); });
 
   const btnWallFull = document.getElementById('camWallFull'), btnWallCut = document.getElementById('camWallCut'), btnWallLow = document.getElementById('camWallLow');
-  function clearWallActive() { [btnWallFull, btnWallCut, btnWallLow].forEach(b => b.classList.remove('ativo')); }
-  btnWallFull.addEventListener('click', () => { clearWallActive(); btnWallFull.classList.add('ativo'); atualizarVisibilidadeAndares('full'); });
-  btnWallCut.addEventListener('click', () => { clearWallActive(); btnWallCut.classList.add('ativo'); atualizarVisibilidadeAndares('cut'); });
-  btnWallLow.addEventListener('click', () => { clearWallActive(); btnWallLow.classList.add('ativo'); atualizarVisibilidadeAndares('low'); });
+  function clearWallActive() { [btnWallFull, btnWallCut, btnWallLow].forEach(b => b?.classList.remove('ativo')); }
+  btnWallFull?.addEventListener('click', () => { clearWallActive(); btnWallFull.classList.add('ativo'); atualizarVisibilidadeAndares('full'); });
+  btnWallCut?.addEventListener('click', () => { clearWallActive(); btnWallCut.classList.add('ativo'); atualizarVisibilidadeAndares('cut'); });
+  btnWallLow?.addEventListener('click', () => { clearWallActive(); btnWallLow.classList.add('ativo'); atualizarVisibilidadeAndares('low'); });
 }
