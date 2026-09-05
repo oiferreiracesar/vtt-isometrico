@@ -1,4 +1,4 @@
-// engine.js - Configuração Core do 3D e Câmera Isométrica
+// js/engine.js - Configuração Core do 3D e Câmera Isométrica
 
 export const canvas = document.getElementById('canvas3d');
 export const scene = new THREE.Scene();
@@ -12,7 +12,11 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 // Configuração da Câmera Ortográfica (Isométrica)
 const tamCena = 15; 
-export let configsCamera = { zoom: 1 };
+export let configsCamera = { 
+  zoom: 1, 
+  angulo: Math.PI / 4, // 45 Graus Iniciais
+  nivel: 0             // Andar 0 (Térreo)
+};
 export const orbitAlvo = new THREE.Vector3(0, 0, 0);
 
 const aspecto = window.innerWidth / window.innerHeight;
@@ -28,8 +32,17 @@ export function atualizarCamera() {
   camera.bottom = -d;
   camera.updateProjectionMatrix();
 
-  // Posiciona a câmera em um ângulo isométrico perfeito e aponta para o alvo
-  camera.position.set(orbitAlvo.x + 20, orbitAlvo.y + 20, orbitAlvo.z + 20);
+  // A distância XZ para isométrico clássico é 20 * sqrt(2) = 28.284
+  const raioIsometrico = 28.28427;
+  
+  // Calcula a posição baseada no giro da câmera
+  const camX = orbitAlvo.x + raioIsometrico * Math.cos(configsCamera.angulo);
+  const camZ = orbitAlvo.z + raioIsometrico * Math.sin(configsCamera.angulo);
+  
+  // O Y da câmera sobe dependendo do andar atual
+  orbitAlvo.y = configsCamera.nivel * 3; 
+
+  camera.position.set(camX, orbitAlvo.y + 20, camZ);
   camera.lookAt(orbitAlvo);
 }
 atualizarCamera();
@@ -41,7 +54,6 @@ const luzDirecional = new THREE.DirectionalLight(0xfff2d8, 0.9);
 luzDirecional.position.set(15, 25, 10);
 scene.add(luzDirecional);
 
-// Responsividade
 window.addEventListener('resize', () => {
   atualizarCamera();
   renderer.setSize(window.innerWidth, window.innerHeight);
