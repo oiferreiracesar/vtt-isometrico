@@ -1,14 +1,8 @@
 // js/engine.js - Configuração Core do 3D e Câmera Isométrica
 export const canvas = document.getElementById('canvas3d');
 
-// BLINDAGEM ABSOLUTA: Bloqueia o menu do navegador em qualquer situação
-window.addEventListener('contextmenu', e => e.preventDefault());
-if (canvas) {
-    canvas.addEventListener('mousedown', e => {
-        // Impede navegadores de ativarem atalhos estranhos ao pintar com Ctrl/Shift
-        if (e.ctrlKey || e.shiftKey) e.preventDefault();
-    });
-}
+// BLINDAGEM ELEGANTE: Bloqueia o menu do Mac sem matar os cliques do jogo!
+window.addEventListener('contextmenu', e => { e.preventDefault(); }, { capture: true });
 
 export const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x14120f);

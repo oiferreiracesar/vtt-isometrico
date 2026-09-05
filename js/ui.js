@@ -1,5 +1,5 @@
 // js/ui.js - Gerenciamento da Interface HTML e Paleta
-import { setModoAtivo, atualizarVisibilidadeAndares, modoVisaoAtual, desfazer, refazer } from './construtor.js';
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
 
@@ -103,7 +103,7 @@ export function iniciarUI() {
   document.getElementById('btnModoTriangulo').addEventListener('click', () => ativarFerramenta('btnModoTriangulo', 'triangulo', 'Sala Triangular: Clique e arraste.'));
   document.getElementById('btnModoOctogono').addEventListener('click', () => ativarFerramenta('btnModoOctogono', 'octogono', 'Sala Octogonal: Clique e arraste.'));
   document.getElementById('btnModoPorta').addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
-  document.getElementById('btnModoPintura').addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo)'));
+  document.getElementById('btnModoPintura').addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo, Ctrl = Remover)'));
   
   document.getElementById('btnModoEscada').addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada: Arraste para o sentido que ela sobe.'));
   document.getElementById('btnModoColuna').addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
