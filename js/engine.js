@@ -1,6 +1,10 @@
 // js/engine.js - Configuração Core do 3D e Câmera Isométrica
 
 export const canvas = document.getElementById('canvas3d');
+
+// === BLOQUEIA O MENU DE CONTEXTO DO NAVEGADOR (Botão Direito / Ctrl+Click) ===
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
 export const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x14120f);
 scene.fog = new THREE.Fog(0x14120f, 25, 90);
@@ -14,8 +18,8 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const tamCena = 15; 
 export let configsCamera = { 
   zoom: 1, 
-  angulo: Math.PI / 4, // 45 Graus Iniciais
-  nivel: 0             // Andar 0 (Térreo)
+  angulo: Math.PI / 4,
+  nivel: 0             
 };
 export const orbitAlvo = new THREE.Vector3(0, 0, 0);
 
@@ -32,14 +36,9 @@ export function atualizarCamera() {
   camera.bottom = -d;
   camera.updateProjectionMatrix();
 
-  // A distância XZ para isométrico clássico é 20 * sqrt(2) = 28.284
   const raioIsometrico = 28.28427;
-  
-  // Calcula a posição baseada no giro da câmera
   const camX = orbitAlvo.x + raioIsometrico * Math.cos(configsCamera.angulo);
   const camZ = orbitAlvo.z + raioIsometrico * Math.sin(configsCamera.angulo);
-  
-  // O Y da câmera sobe dependendo do andar atual
   orbitAlvo.y = configsCamera.nivel * 3; 
 
   camera.position.set(camX, orbitAlvo.y + 20, camZ);
