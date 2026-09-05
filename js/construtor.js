@@ -1,10 +1,10 @@
-// js/construtor.js - Múltiplos Andares, Cômodos e SISTEMA DE HISTÓRICO (Undo/Redo BLINDADO)
+// js/construtor.js - Múltiplos Andares, Cômodos e HISTÓRICO (Blindado contra Bugs)
 import { scene, camera, canvas, configsCamera } from './engine.js';
 import { configMapa, meshChaoBase } from './mapa.js';
 import { showAviso, itemSelecionadoAtual } from './ui.js';
 
 export let modoAtivo = null;
-export let modoVisaoAtual = 'full'; 
+export let modoVisaoAtual = 'full';
 
 export const comodosConstruidos = []; 
 export const paredesConstruidas = [];
@@ -135,7 +135,7 @@ function finalizarPintura(mesh) {
     if (p) p.newMats = Array.isArray(mesh.material) ? [...mesh.material] : mesh.material.clone();
 }
 
-// --- MATERIAIS ---
+// --- MATERIAIS E OBJETOS BASE ---
 const materialParede = new THREE.MeshLambertMaterial({ color: 0x6a5f48 });
 const materialCerca = new THREE.MeshLambertMaterial({ color: 0x5a4f38 }); 
 const materialPiso = new THREE.MeshLambertMaterial({ color: 0x8a7550 });
@@ -148,7 +148,18 @@ cursor3D.rotation.x = -Math.PI / 2; cursor3D.visible = false; scene.add(cursor3D
 const previaMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materialPrevia);
 previaMesh.visible = false; scene.add(previaMesh);
 
-const raycaster = new THREE.Raycaster(); const mouseNdc = new THREE.Vector2();
+const raycaster = new THREE.Raycaster(); 
+const mouseNdc = new THREE.Vector2();
+
+// 🚨 A FUNÇÃO QUE FALTAVA 🚨
+export function setModoAtivo(modo) {
+  modoAtivo = modo;
+  arrastandoConstrucao = false;
+  pontoA = null;
+  comodoArrastado = null;
+  previaMesh.visible = false;
+  cursor3D.visible = false;
+}
 
 function snapGrid(valor) { return Math.round(valor / configMapa.tamanhoGrid) * configMapa.tamanhoGrid; }
 function snapCentroCelula(valor) { return Math.floor(valor / configMapa.tamanhoGrid) * configMapa.tamanhoGrid + configMapa.tamanhoGrid / 2; }
@@ -196,6 +207,7 @@ function removerObjetoMundo(tipo, obj, arrayBase) {
     }
 }
 
+// MARRETA INTELIGENTE
 function executarMarreta(hitObject) {
   if (!hitObject || hitObject === meshChaoBase) return;
   const isPiso = pisosConstruidos.some(p => p.mesh === hitObject);
@@ -439,7 +451,7 @@ window.addEventListener('pointerup', e => {
 });
 
 function aplicarMovimento(comodo, dx, dz) {
-    comodo.paredes.forEach(p => { p.ax += dx; p.az += dz; p.bx += dx; p.bz += dx; p.mesh.position.x += dx; p.mesh.position.z += dz; });
+    comodo.paredes.forEach(p => { p.ax += dx; p.az += dz; p.bx += dx; p.bz += dz; p.mesh.position.x += dx; p.mesh.position.z += dz; });
     comodo.pilares.forEach(p => { p.x += dx; p.z += dz; p.mesh.position.x += dx; p.mesh.position.z += dz; });
 }
 
