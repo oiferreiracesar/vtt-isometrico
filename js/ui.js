@@ -1,7 +1,7 @@
 // js/ui.js - Gerenciamento da Interface HTML e Paleta
 import { setModoAtivo, mudarVisaoParedes } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
-import { redimensionarMapa } from './mapa.js'; // NOVO IMPORT
+import { redimensionarMapa } from './mapa.js';
 
 let avisoTimeout = null;
 export function showAviso(msg) {
@@ -15,20 +15,16 @@ export function showAviso(msg) {
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-// === SISTEMA DE PALETA E ASSETS ===
 export let paleta = [];
 export let idPaletaSelecionada = null;
 let proximoIdPaleta = 1;
 
-export function itemSelecionadoAtual() {
-  return paleta.find(p => p.id === idPaletaSelecionada) || null;
-}
+export function itemSelecionadoAtual() { return paleta.find(p => p.id === idPaletaSelecionada) || null; }
 
 function renderizarPaleta() {
   const div = document.getElementById('paletaTexturas');
   div.innerHTML = '';
   if (!paleta.length) { div.innerHTML = '<span class="paletaVazia">Carregando Banco de Assets...</span>'; return; }
-  
   paleta.forEach(item => {
     const sw = document.createElement('div');
     sw.className = 'swatchTextura' + (item.id === idPaletaSelecionada ? ' selecionada' : '');
@@ -42,24 +38,14 @@ function renderizarPaleta() {
 
 function carregarBancoDeAssets() {
   const coresIniciais = ['#e2e8f0', '#334155', '#4ade80']; 
-  coresIniciais.forEach(cor => {
-      const id = proximoIdPaleta++; paleta.push({ id, tipo: 'cor', cor });
-      if (idPaletaSelecionada === null) idPaletaSelecionada = id;
-  });
-  const loader = new THREE.TextureLoader();
-  loader.setCrossOrigin('Anonymous'); 
+  coresIniciais.forEach(cor => { const id = proximoIdPaleta++; paleta.push({ id, tipo: 'cor', cor }); if (idPaletaSelecionada === null) idPaletaSelecionada = id; });
+  const loader = new THREE.TextureLoader(); loader.setCrossOrigin('Anonymous'); 
   const texturasIniciais = [
       'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/brick_diffuse.jpg',
       'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/hardwood2_diffuse.jpg',
       'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/terrain/grasslight-big.jpg'
   ];
-  texturasIniciais.forEach(url => {
-      loader.load(url, (textura) => {
-          textura.colorSpace = THREE.SRGBColorSpace;
-          const id = proximoIdPaleta++; paleta.push({ id, tipo: 'imagem', dataUrl: url, textura });
-          renderizarPaleta();
-      });
-  });
+  texturasIniciais.forEach(url => { loader.load(url, (textura) => { textura.colorSpace = THREE.SRGBColorSpace; const id = proximoIdPaleta++; paleta.push({ id, tipo: 'imagem', dataUrl: url, textura }); renderizarPaleta(); }); });
   renderizarPaleta();
 }
 
@@ -71,30 +57,22 @@ export function iniciarUI() {
     Array.from(e.target.files || []).forEach(arquivo => {
       const leitor = new FileReader();
       leitor.onload = ev => {
-        const dataUrl = ev.target.result;
-        const textura = new THREE.TextureLoader().load(dataUrl);
-        textura.colorSpace = THREE.SRGBColorSpace;
+        const dataUrl = ev.target.result; const textura = new THREE.TextureLoader().load(dataUrl); textura.colorSpace = THREE.SRGBColorSpace;
         const id = proximoIdPaleta++; paleta.push({ id, tipo: 'imagem', dataUrl, textura });
-        if (idPaletaSelecionada === null) idPaletaSelecionada = id;
-        renderizarPaleta(); showAviso(`Material adicionado.`);
-      };
-      leitor.readAsDataURL(arquivo);
+        if (idPaletaSelecionada === null) idPaletaSelecionada = id; renderizarPaleta(); showAviso(`Material adicionado.`);
+      }; leitor.readAsDataURL(arquivo);
     });
   });
 
   document.getElementById('btnAdicionarCor').addEventListener('click', () => {
-    const cor = document.getElementById('inputCorNova').value;
-    const id = proximoIdPaleta++; paleta.push({ id, tipo: 'cor', cor });
-    if (idPaletaSelecionada === null) idPaletaSelecionada = id;
-    renderizarPaleta(); showAviso(`Cor adicionada.`);
+    const cor = document.getElementById('inputCorNova').value; const id = proximoIdPaleta++; paleta.push({ id, tipo: 'cor', cor });
+    if (idPaletaSelecionada === null) idPaletaSelecionada = id; renderizarPaleta(); showAviso(`Cor adicionada.`);
   });
 
   function ativarFerramenta(botaoId, modo, msg) {
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('ativo'));
-    const btn = document.getElementById(botaoId);
-    if(btn) btn.classList.add('ativo');
-    setModoAtivo(modo);
-    if(msg) showAviso(msg);
+    const btn = document.getElementById(botaoId); if(btn) btn.classList.add('ativo');
+    setModoAtivo(modo); if(msg) showAviso(msg);
   }
 
   const simsPanel = document.getElementById('sims-panel');
@@ -105,49 +83,34 @@ export function iniciarUI() {
       const isAlreadyActive = btn.classList.contains('active');
       document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.sub-panel').forEach(panel => panel.classList.remove('active'));
-      
-      if (isAlreadyActive) {
-        simsPanel.style.display = 'none';
-        ativarFerramenta('btnSairModo', null, 'Menu recolhido. Câmera livre.');
-      } else {
-        btn.classList.add('active');
-        const targetId = btn.getAttribute('data-target');
-        const targetPanel = document.getElementById(targetId);
-        if(targetPanel) targetPanel.classList.add('active');
-        simsPanel.style.display = 'flex';
-      }
+      if (isAlreadyActive) { simsPanel.style.display = 'none'; ativarFerramenta('btnSairModo', null, 'Menu recolhido.'); } 
+      else { btn.classList.add('active'); document.getElementById(btn.getAttribute('data-target')).classList.add('active'); simsPanel.style.display = 'flex'; }
     });
   });
 
-  // Aba Construção
-  document.getElementById('btnModoParede').addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Modo Parede: Clique e arraste. (Ctrl = Marreta)'));
+  document.getElementById('btnModoParede').addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste. (Ctrl = Marreta)'));
+  document.getElementById('btnModoCerca').addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem bloquear pintura ou luz.'));
   document.getElementById('btnModoRetangulo').addEventListener('click', () => ativarFerramenta('btnModoRetangulo', 'retangulo', 'Sala Retangular: Clique e arraste.'));
   document.getElementById('btnModoTriangulo').addEventListener('click', () => ativarFerramenta('btnModoTriangulo', 'triangulo', 'Sala Triangular: Clique e arraste.'));
   document.getElementById('btnModoOctogono').addEventListener('click', () => ativarFerramenta('btnModoOctogono', 'octogono', 'Sala Octogonal: Clique e arraste.'));
   document.getElementById('btnModoPorta').addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
-  document.getElementById('btnModoPintura').addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: Clique no chão/parede. (Shift = Preencher tudo)'));
+  document.getElementById('btnModoPintura').addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo)'));
   document.getElementById('btnSairModo').addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Modo de Navegação livre.'));
 
   const botoesFuturos = ['btnModoTelhado', 'btnModoEscada', 'btnModoTerreno', 'btnModoAgua'];
-  botoesFuturos.forEach(id => { document.getElementById(id).addEventListener('click', () => showAviso("Em breve na próxima atualização!")); });
+  botoesFuturos.forEach(id => { document.getElementById(id).addEventListener('click', () => showAviso("Em breve!")); });
 
-  // Aba Tabuleiro (NOVO)
   document.getElementById('btnRedimensionarMapa').addEventListener('click', () => {
-    const w = parseInt(document.getElementById('inputMapaX').value) || 32;
-    const d = parseInt(document.getElementById('inputMapaZ').value) || 18;
-    redimensionarMapa(w, d);
-    showAviso(`Tabuleiro redimensionado para ${w}x${d} quadrados.`);
+    const w = parseInt(document.getElementById('inputMapaX').value) || 32, d = parseInt(document.getElementById('inputMapaZ').value) || 18;
+    redimensionarMapa(w, d); showAviso(`Tabuleiro redimensionado para ${w}x${d}.`);
   });
 
-  // Câmera
   document.getElementById('camZoomIn').addEventListener('click', () => { configsCamera.zoom = Math.min(8, configsCamera.zoom + 0.5); atualizarCamera(); });
   document.getElementById('camZoomOut').addEventListener('click', () => { configsCamera.zoom = Math.max(0.2, configsCamera.zoom - 0.5); atualizarCamera(); });
   document.getElementById('camRotLeft').addEventListener('click', () => { configsCamera.angulo -= Math.PI / 2; atualizarCamera(); });
   document.getElementById('camRotRight').addEventListener('click', () => { configsCamera.angulo += Math.PI / 2; atualizarCamera(); });
 
-  const btnWallFull = document.getElementById('camWallFull');
-  const btnWallCut = document.getElementById('camWallCut');
-  const btnWallLow = document.getElementById('camWallLow');
+  const btnWallFull = document.getElementById('camWallFull'), btnWallCut = document.getElementById('camWallCut'), btnWallLow = document.getElementById('camWallLow');
   function clearWallActive() { [btnWallFull, btnWallCut, btnWallLow].forEach(b => b.classList.remove('ativo')); }
   btnWallFull.addEventListener('click', () => { clearWallActive(); btnWallFull.classList.add('ativo'); mudarVisaoParedes('full'); });
   btnWallCut.addEventListener('click', () => { clearWallActive(); btnWallCut.classList.add('ativo'); mudarVisaoParedes('cut'); });
