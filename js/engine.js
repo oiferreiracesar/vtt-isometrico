@@ -3,10 +3,12 @@ export const canvas = document.getElementById('canvas3d');
 
 // BLINDAGEM ABSOLUTA: Bloqueia o menu do navegador em qualquer situação
 window.addEventListener('contextmenu', e => e.preventDefault());
-canvas.addEventListener('mousedown', e => {
-    // Impede navegadores (especialmente no Mac) de ativarem atalhos estranhos ao pintar com Ctrl/Shift
-    if (e.ctrlKey || e.shiftKey) e.preventDefault();
-});
+if (canvas) {
+    canvas.addEventListener('mousedown', e => {
+        // Impede navegadores de ativarem atalhos estranhos ao pintar com Ctrl/Shift
+        if (e.ctrlKey || e.shiftKey) e.preventDefault();
+    });
+}
 
 export const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x14120f);

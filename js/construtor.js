@@ -30,8 +30,8 @@ function finalizarAcao() {
     if (!acaoAtual) return;
     if (acaoAtual.add.length > 0 || acaoAtual.rem.length > 0 || acaoAtual.paint.length > 0 || acaoAtual.move.length > 0) {
         historicoUndo.push(acaoAtual);
-        if (historicoUndo.length > 30) historicoUndo.shift(); // Limita a memória a 30 passos
-        historicoRedo.length = 0; // Se você faz uma ação nova, o futuro alternativo é apagado
+        if (historicoUndo.length > 30) historicoUndo.shift(); 
+        historicoRedo.length = 0; 
     }
     acaoAtual = null;
 }
@@ -54,7 +54,7 @@ export function desfazer() {
             }
         }
     });
-    acao.rem.reverse().forEach(item => { // Reverse para manter a ordem correta de inserção
+    acao.rem.reverse().forEach(item => { 
         scene.add(item.obj.mesh);
         item.arrayBase.splice(item.indexInsercao, 0, item.obj);
         if (item.obj.comodoId) {
@@ -104,7 +104,6 @@ export function refazer() {
     showAviso("Refazer (Redo)");
 }
 
-// Escuta de Teclado Global
 window.addEventListener('keydown', e => {
     if (e.ctrlKey || e.metaKey) {
         if (e.key.toLowerCase() === 'z') {
@@ -117,7 +116,6 @@ window.addEventListener('keydown', e => {
     }
 });
 
-// Funções de Registro Auxiliares
 function registrarAdicao(tipo, obj, arrayBase) {
     if (acaoAtual) acaoAtual.add.push({ tipo, obj, arrayBase });
 }
@@ -129,16 +127,20 @@ function registrarRemocao(tipo, obj, arrayBase) {
 function registrarPintura(mesh) {
     if (!acaoAtual) return;
     const jaPintado = acaoAtual.paint.find(p => p.obj === mesh);
-    if (!jaPintado) acaoAtual.paint.push({ obj: mesh, oldMats: [...mesh.material], newMats: null });
+    if (!jaPintado) {
+        // CORREÇÃO: Lê se é parede (array) ou piso (único) antes de clonar!
+        const oldMats = Array.isArray(mesh.material) ? [...mesh.material] : mesh.material.clone();
+        acaoAtual.paint.push({ obj: mesh, oldMats, newMats: null });
+    }
 }
 function finalizarPintura(mesh) {
     if (!acaoAtual) return;
     const p = acaoAtual.paint.find(p => p.obj === mesh);
-    if (p) p.newMats = [...mesh.material];
+    if (p) {
+        p.newMats = Array.isArray(mesh.material) ? [...mesh.material] : mesh.material.clone();
+    }
 }
 
-
-// --- MATERIAIS BÁSICOS ---
 const materialParede = new THREE.MeshLambertMaterial({ color: 0x6a5f48 });
 const materialCerca = new THREE.MeshLambertMaterial({ color: 0x5a4f38 }); 
 const materialPiso = new THREE.MeshLambertMaterial({ color: 0x8a7550 });
@@ -205,7 +207,6 @@ function removerObjetoMundo(tipo, obj, arrayBase) {
     }
 }
 
-// MARRETA INTELIGENTE (Ignora chão no modo de desenho)
 function executarMarreta(hitObject) {
   if (hitObject === meshChaoBase) return;
   const isPiso = pisosConstruidos.some(p => p.mesh === hitObject);
@@ -232,13 +233,8 @@ function executarMarreta(hitObject) {
   if (escada) { removerObjetoMundo('escada', escada, escadasConstruidas); return; }
 }
 
-// ----------------------------------------------------
-// INTERAÇÕES PRINCIPAIS
-// ----------------------------------------------------
 canvas.addEventListener('pointerdown', e => {
-  // O Mac usa button === 2 se você apertar Ctrl+Click. Permitimos isso para salvar os usuários da Apple!
   if ((e.button !== 0 && !(e.button === 2 && e.ctrlKey)) || !modoAtivo) return;
-
   iniciarAcao();
 
   if (e.ctrlKey && modoAtivo !== 'pintura' && modoAtivo !== 'selecao') {
@@ -388,9 +384,8 @@ canvas.addEventListener('pointermove', e => {
       if (chaoHit) {
           const atualX = snapGrid(chaoHit.point.x), atualZ = snapGrid(chaoHit.point.z);
           const dx = atualX - pontoA.x, dz = atualZ - pontoA.z;
-          pontoA = { x: atualX, z: atualZ }; // Atualiza a âncora
-          aplicarMovimento(comodoArrastado, dx, dz); // Arrasta em tempo real
-          
+          pontoA = { x: atualX, z: atualZ }; 
+          aplicarMovimento(comodoArrastado, dx, dz); 
           if (acaoAtual) {
               const moveRecord = acaoAtual.move.find(m => m.comodoId === comodoArrastado.id);
               if (moveRecord) { moveRecord.dx += dx; moveRecord.dz += dz; } 
@@ -431,7 +426,6 @@ window.addEventListener('pointerup', e => {
       comodoArrastado.paredes.forEach(p => p.mesh.material.forEach(m => m.emissive.setHex(0x000000)));
       comodoArrastado = null; pontoA = null;
   }
-
   if (arrastandoConstrucao && pontoA) {
     const hit = raycastPlanoBase(e.clientX, e.clientY);
     if (hit) {
@@ -439,7 +433,6 @@ window.addEventListener('pointerup', e => {
       if (Math.abs(px - pontoA.x) > 0.1 || Math.abs(pz - pontoA.z) > 0.1) {
         const comodoId = Date.now() + Math.random();
         comodosConstruidos.push({ id: comodoId, paredes: [], pilares: [] });
-
         if (modoAtivo === 'parede') criarLinhaDeParedes(pontoA.x, pontoA.z, px, pz, obterAltura(), false, comodoId);
         else if (modoAtivo === 'cerca') criarLinhaDeParedes(pontoA.x, pontoA.z, px, pz, 1.0, true, comodoId);
         else if (modoAtivo === 'escada') criarEscada(pontoA.x, pontoA.z, px, pz, obterAltura());
@@ -450,8 +443,7 @@ window.addEventListener('pointerup', e => {
     }
     arrastandoConstrucao = false; pontoA = null; previaMesh.visible = false;
   }
-  
-  finalizarAcao(); // Fecha a etapa do Histórico
+  finalizarAcao(); 
 });
 
 function aplicarMovimento(comodo, dx, dz) {
@@ -459,9 +451,6 @@ function aplicarMovimento(comodo, dx, dz) {
     comodo.pilares.forEach(p => { p.x += dx; p.z += dz; p.mesh.position.x += dx; p.mesh.position.z += dz; });
 }
 
-// ----------------------------------------------------
-// CONSTRUÇÃO ESTRUTURAL E AGRUPAMENTO
-// ----------------------------------------------------
 function limparPilaresSoltos() {
     for (let i = pilaresConstruidos.length - 1; i >= 0; i--) {
         const pilar = pilaresConstruidos[i];
@@ -469,154 +458,51 @@ function limparPilaresSoltos() {
         if (!emUso) { removerObjetoMundo('pilar', pilar, pilaresConstruidos); }
     }
 }
-
 function obterOuCriarPilar(x, z, altura, isCerca, comodoId = null) {
     let pilar = pilaresConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01 && p.nivel === configsCamera.nivel && p.comodoId === comodoId);
     if (!pilar) {
-        const mat = isCerca ? materialCerca : materialParede;
-        const materiais = [mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone()];
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, 0.25), materiais);
-        const alturaBase = configsCamera.nivel * obterAltura();
-        mesh.position.set(x, alturaBase + altura / 2, z);
-        scene.add(mesh);
-        
-        pilar = { mesh, x, z, altura, nivel: configsCamera.nivel, comodoId };
-        pilaresConstruidos.push(pilar);
-        registrarAdicao('pilar', pilar, pilaresConstruidos);
-        
+        const mat = isCerca ? materialCerca : materialParede; const materiais = [mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone()];
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, 0.25), materiais); const alturaBase = configsCamera.nivel * obterAltura(); mesh.position.set(x, alturaBase + altura / 2, z); scene.add(mesh);
+        pilar = { mesh, x, z, altura, nivel: configsCamera.nivel, comodoId }; pilaresConstruidos.push(pilar); registrarAdicao('pilar', pilar, pilaresConstruidos);
         if (comodoId) { const c = comodosConstruidos.find(com => com.id === comodoId); if (c) c.pilares.push(pilar); }
-    }
-    return pilar;
+    } return pilar;
 }
-
 function criarSegmentoParede(ax, az, bx, bz, altura, isCerca, comodoId = null) {
   const existe = paredesConstruidas.find(p => p.nivel === configsCamera.nivel && ((Math.abs(p.ax - ax) < 0.01 && Math.abs(p.az - az) < 0.01 && Math.abs(p.bx - bx) < 0.01 && Math.abs(p.bz - bz) < 0.01) || (Math.abs(p.ax - bx) < 0.01 && Math.abs(p.az - bz) < 0.01 && Math.abs(p.bx - ax) < 0.01 && Math.abs(p.bz - az) < 0.01)));
   if (existe) return;
   const dx = bx - ax, dz = bz - az; const compTotal = Math.hypot(dx, dz); if (compTotal < 0.05) return;
-  
   const pilarA = obterOuCriarPilar(ax, az, altura, isCerca, comodoId); const pilarB = obterOuCriarPilar(bx, bz, altura, isCerca, comodoId);
-  const compParede = Math.max(0.001, compTotal - 0.25);
-  const mat = isCerca ? materialCerca : materialParede;
-  const materiais = [mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone()];
-
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, compParede), materiais);
-  const alturaBase = configsCamera.nivel * obterAltura();
-  mesh.position.set((ax+bx)/2, alturaBase + altura/2, (az+bz)/2); mesh.rotation.y = Math.atan2(dx, dz);
-  scene.add(mesh);
-  
+  const compParede = Math.max(0.001, compTotal - 0.25); const mat = isCerca ? materialCerca : materialParede; const materiais = [mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone()];
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, compParede), materiais); const alturaBase = configsCamera.nivel * obterAltura(); mesh.position.set((ax+bx)/2, alturaBase + altura/2, (az+bz)/2); mesh.rotation.y = Math.atan2(dx, dz); scene.add(mesh);
   const parede = { mesh, ax, az, bx, bz, altura, nivel: configsCamera.nivel, isPorta: false, isCerca, pilarA, pilarB, comodoId };
-  paredesConstruidas.push(parede);
-  registrarAdicao('parede', parede, paredesConstruidas);
-  
+  paredesConstruidas.push(parede); registrarAdicao('parede', parede, paredesConstruidas);
   if (comodoId) { const c = comodosConstruidos.find(com => com.id === comodoId); if (c) c.paredes.push(parede); }
 }
-
-function criarLinhaDeParedes(ax, az, bx, bz, altura, isCerca = false, comodoId = null) {
-  const dx = bx - ax, dz = bz - az; const compTotal = Math.hypot(dx, dz); if (compTotal < 0.05) return;
-  const qtd = Math.max(1, Math.round(compTotal / configMapa.tamanhoGrid));
-  const stepX = dx / qtd, stepZ = dz / qtd;
-  for (let i = 0; i < qtd; i++) { criarSegmentoParede(ax + stepX * i, az + stepZ * i, ax + stepX * (i + 1), az + stepZ * (i + 1), altura, isCerca, comodoId); }
-}
-
+function criarLinhaDeParedes(ax, az, bx, bz, altura, isCerca = false, comodoId = null) { const dx = bx - ax, dz = bz - az; const compTotal = Math.hypot(dx, dz); if (compTotal < 0.05) return; const qtd = Math.max(1, Math.round(compTotal / configMapa.tamanhoGrid)); const stepX = dx / qtd, stepZ = dz / qtd; for (let i = 0; i < qtd; i++) { criarSegmentoParede(ax + stepX * i, az + stepZ * i, ax + stepX * (i + 1), az + stepZ * (i + 1), altura, isCerca, comodoId); } }
 function criarPoligonoDeParedes(vertices, altura, comodoId = null) { for (let i = 0; i < vertices.length; i++) { criarLinhaDeParedes(vertices[i].x, vertices[i].z, vertices[(i + 1) % vertices.length].x, vertices[(i + 1) % vertices.length].z, altura, false, comodoId); } }
 function criarRetangulo(x1, z1, x2, z2, altura, comodoId = null) { const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2); criarPoligonoDeParedes([{ x: minX, z: minZ }, { x: maxX, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura, comodoId); }
 function criarTriangulo(x1, z1, x2, z2, altura, comodoId = null) { const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2); criarPoligonoDeParedes([{ x: (minX + maxX) / 2, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }], altura, comodoId); }
 function criarOctogono(x1, z1, x2, z2, altura, comodoId = null) { const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2); const w = maxX - minX, d = maxZ - minZ, offX = w * 0.3, offZ = d * 0.3; criarPoligonoDeParedes([{ x: minX + offX, z: minZ }, { x: maxX - offX, z: minZ }, { x: maxX, z: minZ + offZ }, { x: maxX, z: maxZ - offZ }, { x: maxX - offX, z: maxZ }, { x: minX + offX, z: maxZ }, { x: minX, z: maxZ - offZ }, { x: minX, z: minZ + offZ }], altura, comodoId); }
+function criarColunaSustentacao(x, z, altura) { const alturaBase = configsCamera.nivel * altura; const materiais = [materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone()]; const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, altura, 0.4), materiais); mesh.position.set(x, alturaBase + altura / 2, z); scene.add(mesh); const coluna = { mesh, x, z, nivel: configsCamera.nivel, altura }; colunasSustentacao.push(coluna); registrarAdicao('coluna', coluna, colunasSustentacao); }
+function criarEscada(ax, az, bx, bz, alturaAndar) { const dx = bx - ax, dz = bz - az; const comp = Math.hypot(dx, dz); if (comp < 0.5) return; const degraus = Math.max(3, Math.floor(comp / (configMapa.tamanhoGrid / 2))); const escadaMesh = new THREE.Group(); const angle = Math.atan2(dx, dz); for (let i = 0; i < degraus; i++) { const stepD = comp / degraus, stepH = alturaAndar / degraus; const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, stepH * (i + 1), stepD), materialPiso.clone()); mesh.position.set(0, (stepH * (i + 1)) / 2, (i * stepD) - comp/2 + stepD/2); escadaMesh.add(mesh); } const alturaBase = configsCamera.nivel * alturaAndar; escadaMesh.position.set((ax+bx)/2, alturaBase, (az+bz)/2); escadaMesh.rotation.y = angle; scene.add(escadaMesh); const escada = { mesh: escadaMesh, nivel: configsCamera.nivel, isEscada: true }; escadasConstruidas.push(escada); registrarAdicao('escada', escada, escadasConstruidas); }
 
-function criarColunaSustentacao(x, z, altura) {
-    const alturaBase = configsCamera.nivel * altura; const materiais = [materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone()];
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, altura, 0.4), materiais); mesh.position.set(x, alturaBase + altura / 2, z); scene.add(mesh);
-    const coluna = { mesh, x, z, nivel: configsCamera.nivel, altura }; colunasSustentacao.push(coluna); registrarAdicao('coluna', coluna, colunasSustentacao);
-}
+function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) { const mat = new THREE.MeshLambertMaterial(); if (item.tipo === 'cor') { mat.color.set(item.cor); } else { const tex = item.textura.clone(); tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(repeatX, repeatY); mat.map = tex; mat.color.set(0xffffff); } return mat; }
+function aplicarMaterialNaFace(mesh, faceIndex, item) { registrarPintura(mesh); let repeatX = 1, repeatY = 1; if (mesh.geometry && mesh.geometry.parameters) { const { width, height, depth } = mesh.geometry.parameters; if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; } } const novosMateriais = [...mesh.material]; novosMateriais[faceIndex] = gerarMaterialPintura(item, repeatX, repeatY); mesh.material = novosMateriais; finalizarPintura(mesh); }
+function pintarFacePorNormalMundial(mesh, targetNormal, item) { const tNorm = targetNormal.clone().normalize(); const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)]; for (let i = 0; i < 6; i++) { const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); if (worldNormal.dot(tNorm) > 0.5) aplicarMaterialNaFace(mesh, i, item); } }
+function removerMaterialNaFace(mesh, faceIndex, matBase) { registrarPintura(mesh); const novosMateriais = [...mesh.material]; novosMateriais[faceIndex] = matBase.clone(); mesh.material = novosMateriais; finalizarPintura(mesh); }
+function removerPinturaFacePorNormal(mesh, targetNormal, matBase) { const tNorm = targetNormal.clone().normalize(); const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)]; for (let i = 0; i < 6; i++) { const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); if (worldNormal.dot(tNorm) > 0.5) removerMaterialNaFace(mesh, i, matBase); } }
+function aplicarPiso(x, z, item) { let tile = pisosConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01 && p.nivel === configsCamera.nivel); if (!tile) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, 0.12, configMapa.tamanhoGrid), materialPiso.clone()); const alturaBase = configsCamera.nivel * obterAltura(); mesh.position.set(x, alturaBase + 0.06, z); scene.add(mesh); tile = { mesh, x, z, nivel: configsCamera.nivel }; pisosConstruidos.push(tile); registrarAdicao('piso', tile, pisosConstruidos); } registrarPintura(tile.mesh); tile.mesh.material = gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid); finalizarPintura(tile.mesh); }
+function removerPiso(x, z) { const tile = pisosConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01 && p.nivel === configsCamera.nivel); if (tile) { removerObjetoMundo('piso', tile, pisosConstruidos); } }
 
-function criarEscada(ax, az, bx, bz, alturaAndar) {
-    const dx = bx - ax, dz = bz - az; const comp = Math.hypot(dx, dz); if (comp < 0.5) return; 
-    const degraus = Math.max(3, Math.floor(comp / (configMapa.tamanhoGrid / 2))); const escadaMesh = new THREE.Group(); const angle = Math.atan2(dx, dz);
-    for (let i = 0; i < degraus; i++) {
-        const stepD = comp / degraus, stepH = alturaAndar / degraus;
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, stepH * (i + 1), stepD), materialPiso.clone());
-        mesh.position.set(0, (stepH * (i + 1)) / 2, (i * stepD) - comp/2 + stepD/2); escadaMesh.add(mesh);
-    }
-    const alturaBase = configsCamera.nivel * alturaAndar; escadaMesh.position.set((ax+bx)/2, alturaBase, (az+bz)/2); escadaMesh.rotation.y = angle; scene.add(escadaMesh);
-    const escada = { mesh: escadaMesh, nivel: configsCamera.nivel, isEscada: true }; escadasConstruidas.push(escada); registrarAdicao('escada', escada, escadasConstruidas);
-}
-
-// ----------------------------------------------------
-// PINTURA E REMOÇÃO DE PINTURA (BORRACHA)
-// ----------------------------------------------------
-function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) {
-  const mat = new THREE.MeshLambertMaterial();
-  if (item.tipo === 'cor') { mat.color.set(item.cor); } else { const tex = item.textura.clone(); tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(repeatX, repeatY); mat.map = tex; mat.color.set(0xffffff); }
-  return mat;
-}
-function aplicarMaterialNaFace(mesh, faceIndex, item) {
-  registrarPintura(mesh);
-  let repeatX = 1, repeatY = 1;
-  if (mesh.geometry && mesh.geometry.parameters) { const { width, height, depth } = mesh.geometry.parameters; if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; } }
-  const novosMateriais = [...mesh.material]; novosMateriais[faceIndex] = gerarMaterialPintura(item, repeatX, repeatY); mesh.material = novosMateriais;
-  finalizarPintura(mesh);
-}
-function pintarFacePorNormalMundial(mesh, targetNormal, item) {
-    const tNorm = targetNormal.clone().normalize(); const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
-    for (let i = 0; i < 6; i++) { const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); if (worldNormal.dot(tNorm) > 0.5) aplicarMaterialNaFace(mesh, i, item); }
-}
-function removerMaterialNaFace(mesh, faceIndex, matBase) {
-    registrarPintura(mesh); const novosMateriais = [...mesh.material]; novosMateriais[faceIndex] = matBase.clone(); mesh.material = novosMateriais; finalizarPintura(mesh);
-}
-function removerPinturaFacePorNormal(mesh, targetNormal, matBase) {
-    const tNorm = targetNormal.clone().normalize(); const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)];
-    for (let i = 0; i < 6; i++) { const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); if (worldNormal.dot(tNorm) > 0.5) removerMaterialNaFace(mesh, i, matBase); }
-}
-function aplicarPiso(x, z, item) {
-  let tile = pisosConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01 && p.nivel === configsCamera.nivel);
-  if (!tile) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, 0.12, configMapa.tamanhoGrid), materialPiso.clone());
-    const alturaBase = configsCamera.nivel * obterAltura(); mesh.position.set(x, alturaBase + 0.06, z); scene.add(mesh);
-    tile = { mesh, x, z, nivel: configsCamera.nivel }; pisosConstruidos.push(tile); registrarAdicao('piso', tile, pisosConstruidos);
-  }
-  registrarPintura(tile.mesh); tile.mesh.material = gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid); finalizarPintura(tile.mesh);
-}
-function removerPiso(x, z) {
-  const tile = pisosConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01 && p.nivel === configsCamera.nivel);
-  if (tile) { removerObjetoMundo('piso', tile, pisosConstruidos); }
-}
-
-// ----------------------------------------------------
-// FLOOD FILL E VISIBILIDADE
-// ----------------------------------------------------
 function distanciaPontoSegmento(px, pz, ax, az, bx, bz) { const compSq = (bx-ax)**2 + (bz-az)**2; if (compSq === 0) return Math.hypot(px-ax, pz-az); let t = Math.max(0, Math.min(1, ((px-ax)*(bx-ax) + (pz-az)*(bz-az)) / compSq)); return Math.hypot(px - (ax + t*(bx-ax)), pz - (az + t*(bz-az))); }
 function paredeQueBloqueia(x1, z1, x2, z2) { const midX = (x1+x2)/2, midZ = (z1+z2)/2; return paredesConstruidas.find(p => p.nivel === configsCamera.nivel && !p.isCerca && distanciaPontoSegmento(midX, midZ, p.ax, p.az, p.bx, p.bz) < 0.2) || null; }
-function encontrarAreaFechada(xInicial, zInicial) {
-  const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = []; const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2;
-  while (pilha.length && celulas.length < 50000) {
-    const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`;
-    if (visitados.has(chave)) continue; visitados.add(chave); if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; 
-    celulas.push(atual);
-    [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => {
-      const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid;
-      if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz });
-    });
-  } return { celulas };
-}
-function setOpacity(mesh, isTransparent, opacity) {
-    if (!mesh) return;
-    if (mesh.type === 'Group') { mesh.children.forEach(child => setOpacity(child, isTransparent, opacity)); } 
-    else if (Array.isArray(mesh.material)) { mesh.material.forEach(m => { m.transparent = isTransparent; m.opacity = opacity; }); } 
-    else if (mesh.material) { mesh.material.transparent = isTransparent; mesh.material.opacity = opacity; }
-}
+function encontrarAreaFechada(xInicial, zInicial) { const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = []; const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2; while (pilha.length && celulas.length < 50000) { const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`; if (visitados.has(chave)) continue; visitados.add(chave); if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; celulas.push(atual); [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => { const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid; if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz }); }); } return { celulas }; }
+function setOpacity(mesh, isTransparent, opacity) { if (!mesh) return; if (mesh.type === 'Group') { mesh.children.forEach(child => setOpacity(child, isTransparent, opacity)); } else if (Array.isArray(mesh.material)) { mesh.material.forEach(m => { m.transparent = isTransparent; m.opacity = opacity; }); } else if (mesh.material) { mesh.material.transparent = isTransparent; mesh.material.opacity = opacity; } }
+
 export function atualizarVisibilidadeAndares(modoVisaoManual) {
-  if (modoVisaoManual) modoVisaoAtual = modoVisãoManual;
+  if (modoVisaoManual) modoVisaoAtual = modoVisaoManual; // CORREÇÃO DO ACENTO AQUI
   const mostrarFantasma = (modoAtivo === 'coluna'); 
-  const aplicarParede = (obj) => {
-     if (obj.nivel > configsCamera.nivel) { if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) { obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); } else { obj.mesh.visible = false; } } 
-     else if (obj.nivel < configsCamera.nivel) { obj.mesh.visible = true; obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, false, 1); } 
-     else {
-         obj.mesh.visible = true;
-         if (modoVisaoAtual === 'full') { obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, false, 1); } 
-         else if (modoVisaoAtual === 'cut') { obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, true, 0.3); } 
-         else if (modoVisaoAtual === 'low') { obj.mesh.scale.y = 0.1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura * 0.1) / 2; setOpacity(obj.mesh, false, 1); }
-     }
-  };
+  const aplicarParede = (obj) => { if (obj.nivel > configsCamera.nivel) { if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) { obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); } else { obj.mesh.visible = false; } } else if (obj.nivel < configsCamera.nivel) { obj.mesh.visible = true; obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, false, 1); } else { obj.mesh.visible = true; if (modoVisaoAtual === 'full') { obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, false, 1); } else if (modoVisaoAtual === 'cut') { obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, true, 0.3); } else if (modoVisaoAtual === 'low') { obj.mesh.scale.y = 0.1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura * 0.1) / 2; setOpacity(obj.mesh, false, 1); } } };
   paredesConstruidas.forEach(aplicarParede); pilaresConstruidos.forEach(aplicarParede);
   colunasSustentacao.forEach(obj => { if (obj.nivel > configsCamera.nivel) obj.mesh.visible = false; else { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } });
   [pisosConstruidos, escadasConstruidas].forEach(arr => { arr.forEach(obj => { if (obj.nivel > configsCamera.nivel) { if (mostrarFantasma && obj.nivel === configsCamera.nivel + 1) { obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); } else obj.mesh.visible = false; } else { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } }); });
