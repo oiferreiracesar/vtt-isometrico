@@ -1,5 +1,5 @@
-// js/ui.js - Gerenciamento da Interface HTML (Com Ocultação Dinâmica no Gizmo)
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, exportarMapa, importarMapa, limparMapa } from './construtor.js';
+// js/ui.js - Gerenciamento da Interface HTML
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
 
@@ -15,7 +15,6 @@ export function showAviso(msg) {
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-// Oculta dinamicamente os botões de rotação se for um telhado!
 export function mostrarGizmo(x, y, tipoObj = 'comodo') {
     const g = document.getElementById('room-gizmo');
     if(g) { 
@@ -182,7 +181,6 @@ export function iniciarUI() {
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  
   document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Arraste para cobrir as suas salas.'));
   
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala, escada ou telhado para ver opções.'));
@@ -215,4 +213,11 @@ export function iniciarUI() {
   btnWallFull?.addEventListener('click', () => { clearWallActive(); btnWallFull.classList.add('ativo'); atualizarVisibilidadeAndares('full'); });
   btnWallCut?.addEventListener('click', () => { clearWallActive(); btnWallCut.classList.add('ativo'); atualizarVisibilidadeAndares('cut'); });
   btnWallLow?.addEventListener('click', () => { clearWallActive(); btnWallLow.classList.add('ativo'); atualizarVisibilidadeAndares('low'); });
+
+  // NOVO: Toggle de Telhados global
+  document.getElementById('camRoofToggle')?.addEventListener('click', (e) => {
+      e.currentTarget.classList.toggle('ativo');
+      const visivel = e.currentTarget.classList.contains('ativo');
+      toggleTelhadosGlobais(visivel);
+  });
 }

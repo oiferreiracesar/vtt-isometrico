@@ -1,10 +1,11 @@
-// js/construtor.js - Motor Completo: Limites de Grade, Formas, Telhados sem bugs e Gizmo Blindado
+// js/construtor.js - Motor Completo: Limites de Grade, Formas, Demolição Auto e Save Blindado
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
 
 export let modoAtivo = null;
 export let modoVisaoAtual = 'full'; 
+export let telhadosVisiveisGlobais = true; // NOVA VARIÁVEL GLOBAL
 
 export const comodosConstruidos = []; 
 export const paredesConstruidas = [];
@@ -53,7 +54,11 @@ const materialPreviaEscada = new THREE.MeshBasicMaterial({ color: 0x4ade80, tran
 
 const cacheTexturas = {}; 
 
-// --- FÍSICA DE COLISÃO AABB (Telhados vs Paredes) ---
+export function toggleTelhadosGlobais(visivel) {
+    telhadosVisiveisGlobais = visivel;
+    atualizarVisibilidadeAndares();
+}
+
 function telhadoIntersectaParede(tx1, tz1, tx2, tz2, parede) {
     const pMinX = Math.min(parede.ax, parede.bx); const pMaxX = Math.max(parede.ax, parede.bx);
     const pMinZ = Math.min(parede.az, parede.bz); const pMaxZ = Math.max(parede.az, parede.bz);
@@ -61,7 +66,6 @@ function telhadoIntersectaParede(tx1, tz1, tx2, tz2, parede) {
     return (tx2 + margem >= pMinX && tx1 - margem <= pMaxX && tz2 + margem >= pMinZ && tz1 - margem <= pMaxZ);
 }
 
-// --- FUNÇÕES DE SEGURANÇA MÁXIMA ---
 function resetEmissive(mesh) {
     if (!mesh || !mesh.material) return;
     if (Array.isArray(mesh.material)) { mesh.material.forEach(m => { if(m && m.emissive) m.emissive.setHex(0x000000); }); } 
@@ -86,7 +90,6 @@ function getSafeMaterialArray(mesh) {
     }
     return arr;
 }
-// -------------------------------------------
 
 function extrairMateriais(mesh) {
     if (!mesh || !mesh.material) return [];
@@ -224,16 +227,10 @@ function snapMeioGrid(valor) { return Math.round(valor / (configMapa.tamanhoGrid
 function snapCentroCelula(valor) { return Math.floor(valor / configMapa.tamanhoGrid) * configMapa.tamanhoGrid + configMapa.tamanhoGrid / 2; }
 function obterAltura() { return parseFloat(document.getElementById('inputAlturaParede')?.value) || 3; }
 
-// --- CERCA INVISÍVEL (O Escudo das Fronteiras) ---
 function clampHit(point) {
-    const maxX = configMapa.largura / 2;
-    const maxZ = configMapa.profundidade / 2;
-    return {
-        x: THREE.MathUtils.clamp(point.x, -maxX, maxX),
-        z: THREE.MathUtils.clamp(point.z, -maxZ, maxZ)
-    };
+    const maxX = configMapa.largura / 2; const maxZ = configMapa.profundidade / 2;
+    return { x: THREE.MathUtils.clamp(point.x, -maxX, maxX), z: THREE.MathUtils.clamp(point.z, -maxZ, maxZ) };
 }
-// ------------------------------------------------
 
 function raycastPlanoBase(clientX, clientY) { 
     mouseNdc.x = (clientX / window.innerWidth) * 2 - 1; mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1; 
@@ -260,9 +257,7 @@ function raycastObjetosDoNivel(clientX, clientY) {
     
     objetosNivel.forEach(obj => {
         if (obj && Array.isArray(obj.material)) {
-            for (let i = 0; i < obj.material.length; i++) {
-                if (!obj.material[i]) obj.material[i] = materialParede.clone();
-            }
+            for (let i = 0; i < obj.material.length; i++) { if (!obj.material[i]) obj.material[i] = materialParede.clone(); }
         }
     });
 
@@ -285,12 +280,12 @@ function obterOuCriarPilar(x, z, altura, isCerca, comodoId = null) { let pilar =
 function criarSegmentoParede(ax, az, bx, bz, altura, isCerca, comodoId = null) { 
   const existe = paredesConstruidas.find(p => p.nivel === configsCamera.nivel && ((Math.abs(p.ax - ax) < 0.01 && Math.abs(p.az - az) < 0.01 && Math.abs(p.bx - bx) < 0.01 && Math.abs(p.bz - bz) < 0.01) || (Math.abs(p.ax - bx) < 0.01 && Math.abs(p.az - bz) < 0.01 && Math.abs(p.bx - ax) < 0.01 && Math.abs(p.bz - az) < 0.01))); 
   if (existe) return; 
-  
-  // SE ESTA PAREDE BATER EM UM TELHADO DO ANDAR DE BAIXO, A ENGINE BARRA!
-  const colideTelhado = telhadosConstruidos.some(t => t.nivel === configsCamera.nivel - 1 && telhadoIntersectaParede(t.ax, t.az, t.bx, t.bz, {ax, az, bx, bz}));
-  if (colideTelhado && !isCerca) {
-      showAviso("🚧 Parede Bloqueada: Está atravessando o telhado do andar inferior! Apague o telhado primeiro.");
-      return;
+
+  // DEMOLIÇÃO AUTOMÁTICA DO TELHADO!
+  const colideTelhado = telhadosConstruidos.filter(t => t.nivel === configsCamera.nivel - 1 && telhadoIntersectaParede(t.ax, t.az, t.bx, t.bz, {ax, az, bx, bz}));
+  if (colideTelhado.length > 0 && !isCerca) {
+      colideTelhado.forEach(t => removerObjetoMundo('telhado', t, telhadosConstruidos));
+      showAviso("🏗️ Telhado demolido automaticamente para dar espaço ao segundo andar!");
   }
 
   const dx = bx - ax, dz = bz - az; const compTotal = Math.hypot(dx, dz); if (compTotal < 0.05) return; 
@@ -569,17 +564,6 @@ window.addEventListener('pointerup', e => {
       const px = snapGrid(pt.x), pz = snapGrid(pt.z);
       if (Math.abs(px - pontoA.x) > 0.1 || Math.abs(pz - pontoA.z) > 0.1) {
         
-        // Bloqueio de Telhado Invadindo o andar de cima
-        if (modoAtivo === 'telhado') {
-            const minX = Math.min(pontoA.x, px); const maxX = Math.max(pontoA.x, px);
-            const minZ = Math.min(pontoA.z, pz); const maxZ = Math.max(pontoA.z, pz);
-            const colideCima = paredesConstruidas.some(p => p.nivel === configsCamera.nivel + 1 && telhadoIntersectaParede(minX, minZ, maxX, maxZ, p));
-            if (colideCima) {
-                showAviso("🚧 Bloqueado: O telhado colide com as paredes do andar superior!");
-                arrastandoConstrucao = false; pontoA = null; previaMesh.visible = false; previaEscadaInicio.visible = false; previaEscadaFim.visible = false; finalizarAcao(); return;
-            }
-        }
-
         const comodoId = Date.now() + Math.random();
         if (modoAtivo !== 'telhado') comodosConstruidos.push({ id: comodoId, paredes: [], pilares: [] });
         
@@ -625,5 +609,11 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
   paredesConstruidas.forEach(aplicarParede); pilaresConstruidos.forEach(aplicarParede);
   colunasSustentacao.forEach(obj => { if (obj.nivel > configsCamera.nivel) obj.mesh.visible = false; else { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } });
   [pisosConstruidos, escadasConstruidas].forEach(arr => { arr.forEach(obj => { if (obj.nivel > configsCamera.nivel) { obj.mesh.visible = false; } else { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } }); });
-  telhadosConstruidos.forEach(obj => { if (obj.nivel > configsCamera.nivel) { obj.mesh.visible = false; } else if (obj.nivel === configsCamera.nivel) { if (modoVisaoAtual === 'full' && modoAtivo !== 'pintura' && !arrastandoConstrucao) { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } else { obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); } } else { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } });
+  
+  telhadosConstruidos.forEach(obj => { 
+      if (!telhadosVisiveisGlobais) { obj.mesh.visible = false; return; }
+      if (obj.nivel > configsCamera.nivel) { obj.mesh.visible = false; } 
+      else if (obj.nivel === configsCamera.nivel) { if (modoVisaoAtual === 'full' && modoAtivo !== 'pintura' && !arrastandoConstrucao) { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } else { obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.15); } } 
+      else { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } 
+  });
 }
