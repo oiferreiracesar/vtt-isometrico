@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML (Com Sistema de Salvar/Carregar)
+// js/ui.js - Gerenciamento da Interface HTML 
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarLarguraEscada, exportarMapa, importarMapa, limparMapa } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -41,8 +41,12 @@ export function selecionarMaterialNaPaleta(matAlvo) {
       match = paleta.find(p => p.tipo === 'cor' && p.cor.toLowerCase() === hex.toLowerCase());
   }
   if (match) {
-      idPaletaSelecionada = match.id; renderizarPaleta(); showAviso("🎨 Pipeta: Textura copiada para o balde!");
-  } else { showAviso("Material não encontrado na paleta base."); }
+      idPaletaSelecionada = match.id;
+      renderizarPaleta();
+      showAviso("🎨 Pipeta: Textura copiada para o balde!");
+  } else {
+      showAviso("Material não encontrado na paleta base.");
+  }
 }
 
 function renderizarPaleta() {
@@ -113,7 +117,6 @@ export function iniciarUI() {
     });
   });
 
-  // --- BOTÕES DE SALVAR, CARREGAR E LIMPAR ---
   document.getElementById('btnSalvarMapa')?.addEventListener('click', exportarMapa);
   
   document.getElementById('btnCarregarMapa')?.addEventListener('click', () => document.getElementById('inputCarregarMapa').click());
@@ -127,11 +130,10 @@ export function iniciarUI() {
               importarMapa(dados);
           } catch(err) {
               showAviso("Erro ao ler o arquivo. O mapa pode estar corrompido.");
-              console.error(err);
           }
       };
       reader.readAsText(file);
-      e.target.value = ''; // Reseta para permitir carregar o mesmo arquivo depois
+      e.target.value = ''; 
   });
 
   document.getElementById('btnLimparMapa')?.addEventListener('click', () => {
@@ -158,7 +160,10 @@ export function iniciarUI() {
   document.getElementById('btnModoPorta')?.addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
   document.getElementById('btnModoPintura')?.addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo, Ctrl = Remover, Alt = Pipeta)'));
   
-  document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada: Arraste para o sentido que ela sobe.'));
+  // ATUALIZADO: Duas ferramentas de escada
+  document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
+  document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
+  
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala ou escada para ver opções.'));
 

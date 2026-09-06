@@ -1,4 +1,4 @@
-// js/construtor.js - Múltiplos Andares, Gizmo, Fog of War e SISTEMA DE DECORAÇÃO (Salvar/Carregar)
+// js/construtor.js - Múltiplos Andares, Gizmo, Masmorras Profundas e SAVE/LOAD
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
@@ -113,7 +113,7 @@ export function limparMapa() {
 
 export function exportarMapa() {
     const dados = {
-        versao: 2, // Versão avançada com decoração
+        versao: 2, 
         pisos: pisosConstruidos.map(p => ({ x: p.x, z: p.z, nivel: p.nivel, materiais: extrairMateriais(p.mesh) })),
         pilares: pilaresConstruidos.map(p => ({ x: p.x, z: p.z, altura: p.altura, nivel: p.nivel, isCerca: p.isCerca, comodoId: p.comodoId, materiais: extrairMateriais(p.mesh) })),
         paredes: paredesConstruidas.map(p => ({ ax: p.ax, az: p.az, bx: p.bx, bz: p.bz, altura: p.altura, isCerca: p.isCerca, comodoId: p.comodoId, nivel: p.nivel, isPorta: p.isPorta, materiais: extrairMateriais(p.mesh) })),
@@ -131,11 +131,10 @@ export function importarMapa(dados) {
     limparMapa();
     const nivelOriginal = configsCamera.nivel;
 
-    // A ORDEM AQUI É VITAL: Pisos, depois Pilares (para segurar as tintas das quinas), Paredes, Colunas e Escadas.
     if(dados.pisos) {
         dados.pisos.forEach(p => {
             configsCamera.nivel = p.nivel;
-            aplicarPiso(p.x, p.z, { tipo: 'cor', cor: '#8a7550' }); // Planta base
+            aplicarPiso(p.x, p.z, { tipo: 'cor', cor: '#8a7550' }); 
             const piso = pisosConstruidos[pisosConstruidos.length - 1];
             aplicarMateriaisImportados(piso.mesh, p.materiais, 'piso');
         });
@@ -153,6 +152,11 @@ export function importarMapa(dados) {
             criarSegmentoParede(p.ax, p.az, p.bx, p.bz, p.altura, p.isCerca, p.comodoId);
             const parede = paredesConstruidas[paredesConstruidas.length - 1];
             aplicarMateriaisImportados(parede.mesh, p.materiais, 'parede');
+            if (p.isPorta) {
+                parede.isPorta = true;
+                const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 });
+                parede.mesh.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta];
+            }
         });
     }
     if(dados.colunas) {
@@ -166,7 +170,7 @@ export function importarMapa(dados) {
     if(dados.escadas) {
         dados.escadas.forEach(e => {
             configsCamera.nivel = e.nivel;
-            criarEscada(e.ax, e.az, e.bx, e.bz, e.alturaAndar, e.largura);
+            criarEscada(e.ax, e.az, e.bx, e.bz, e.alturaAndar, e.largura, e.nivel);
             const escada = escadasConstruidas[escadasConstruidas.length - 1];
             if (e.material) {
                 escada.textura = { tipo: e.material.tipo, cor: e.material.cor, dataUrl: e.material.dataUrl };
@@ -489,7 +493,7 @@ canvas?.addEventListener('pointerdown', e => {
     return;
   }
   
-  if (['parede', 'cerca', 'escada', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) {
+  if (['parede', 'cerca', 'escada', 'escada_baixo', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) {
     const hit = raycastPlanoBase(e.clientX, e.clientY);
     if (hit) { pontoA = { x: snapGrid(hit.point.x), z: snapGrid(hit.point.z) }; arrastandoConstrucao = true; }
     return;
@@ -656,16 +660,18 @@ canvas?.addEventListener('pointermove', e => {
       if(divMedida) {
           divMedida.style.display = 'block'; divMedida.style.left = (e.clientX + 15) + 'px'; divMedida.style.top = (e.clientY + 15) + 'px';
           const dxM = Math.abs(px - pontoA.x) / configMapa.tamanhoGrid, dzM = Math.abs(pz - pontoA.z) / configMapa.tamanhoGrid;
-          if (modoAtivo === 'escada') { divMedida.textContent = `Escada: ${Math.round(Math.hypot(dxM, dzM))} blocos`; } 
+          if (modoAtivo === 'escada' || modoAtivo === 'escada_baixo') { divMedida.textContent = `Escada: ${Math.round(Math.hypot(dxM, dzM))} blocos`; } 
           else if (modoAtivo === 'parede' || modoAtivo === 'cerca') { divMedida.textContent = `Comprimento: ${Math.round(Math.hypot(dxM, dzM))}`; } 
           else { divMedida.textContent = `${Math.round(dxM)} x ${Math.round(dzM)}`; }
       }
 
       const isCerca = (modoAtivo === 'cerca');
       const hTemp = isCerca ? 1.0 : obterAltura(); 
-      if (modoAtivo === 'parede' || modoAtivo === 'cerca' || modoAtivo === 'escada') {
+      if (modoAtivo === 'parede' || modoAtivo === 'cerca' || modoAtivo === 'escada' || modoAtivo === 'escada_baixo') {
         const dx = px - pontoA.x, dz = pz - pontoA.z; const comp = Math.sqrt(dx*dx + dz*dz) || 0.01;
         previaMesh.scale.set(0.25, hTemp, comp + 0.25); previaMesh.position.set((pontoA.x + px)/2, alturaBase + hTemp/2, (pontoA.z + pz)/2); previaMesh.rotation.y = Math.atan2(dx, dz); previaMesh.visible = true;
+        // Diferencia a cor para indicar que a escada está afundando
+        if (previaMesh.material.color) previaMesh.material.color.setHex(modoAtivo === 'escada_baixo' ? 0xff4444 : 0x38bdf8);
       } else if (modoAtivo !== 'coluna') {
         const w = Math.abs(px - pontoA.x) || 0.1, d = Math.abs(pz - pontoA.z) || 0.1;
         previaMesh.scale.set(w, hTemp, d); previaMesh.position.set((pontoA.x + px)/2, alturaBase + hTemp/2, (pontoA.z + pz)/2); previaMesh.rotation.y = 0; previaMesh.visible = true;
@@ -687,9 +693,22 @@ window.addEventListener('pointerup', e => {
       if (Math.abs(px - pontoA.x) > 0.1 || Math.abs(pz - pontoA.z) > 0.1) {
         const comodoId = Date.now() + Math.random();
         comodosConstruidos.push({ id: comodoId, paredes: [], pilares: [] });
+        
         if (modoAtivo === 'parede') criarLinhaDeParedes(pontoA.x, pontoA.z, px, pz, obterAltura(), false, comodoId);
         else if (modoAtivo === 'cerca') criarLinhaDeParedes(pontoA.x, pontoA.z, px, pz, 1.0, true, comodoId);
-        else if (modoAtivo === 'escada') criarEscada(pontoA.x, pontoA.z, px, pz, obterAltura());
+        else if (modoAtivo === 'escada') {
+            criarEscada(pontoA.x, pontoA.z, px, pz, obterAltura(), configMapa.tamanhoGrid, configsCamera.nivel);
+            configsCamera.nivel += 1;
+            atualizarCamera(); atualizarVisibilidadeAndares();
+            showAviso(`Escada criada! Subiu para o Nível ${configsCamera.nivel}.`);
+        }
+        else if (modoAtivo === 'escada_baixo') {
+            // Inverte as pontas para a escada descer e pertencer ao nível inferior!
+            criarEscada(px, pz, pontoA.x, pontoA.z, obterAltura(), configMapa.tamanhoGrid, configsCamera.nivel - 1);
+            configsCamera.nivel -= 1;
+            atualizarCamera(); atualizarVisibilidadeAndares();
+            showAviso(`Escotilha criada! Desceu para o Nível ${configsCamera.nivel}.`);
+        }
         else if (modoAtivo === 'retangulo') criarRetangulo(pontoA.x, pontoA.z, px, pz, obterAltura(), comodoId);
         else if (modoAtivo === 'triangulo') criarTriangulo(pontoA.x, pontoA.z, px, pz, obterAltura(), comodoId);
         else if (modoAtivo === 'octogono') criarOctogono(pontoA.x, pontoA.z, px, pz, obterAltura(), comodoId);
@@ -751,11 +770,11 @@ function criarTriangulo(x1, z1, x2, z2, altura, comodoId = null) { const minX = 
 function criarOctogono(x1, z1, x2, z2, altura, comodoId = null) { const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2); const w = maxX - minX, d = maxZ - minZ, offX = w * 0.3, offZ = d * 0.3; criarPoligonoDeParedes([{ x: minX + offX, z: minZ }, { x: maxX - offX, z: minZ }, { x: maxX, z: minZ + offZ }, { x: maxX, z: maxZ - offZ }, { x: maxX - offX, z: maxZ }, { x: minX + offX, z: maxZ }, { x: minX, z: maxZ - offZ }, { x: minX, z: minZ + offZ }], altura, comodoId); }
 function criarColunaSustentacao(x, z, altura) { const alturaBase = configsCamera.nivel * altura; const materiais = [materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone()]; const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, altura, 0.4), materiais); mesh.position.set(x, alturaBase + altura / 2, z); scene.add(mesh); const coluna = { mesh, x, z, nivel: configsCamera.nivel, altura }; colunasSustentacao.push(coluna); registrarAdicao('coluna', coluna, colunasSustentacao); }
 
-function criarEscada(ax, az, bx, bz, alturaAndar, largura = configMapa.tamanhoGrid) { 
+function criarEscada(ax, az, bx, bz, alturaAndar, largura = configMapa.tamanhoGrid, targetNivel = configsCamera.nivel) { 
     const dx = bx - ax, dz = bz - az; const comp = Math.hypot(dx, dz); if (comp < 0.5) return; 
     const escadaMesh = new THREE.Group(); 
     const id = Date.now() + Math.random(); 
-    const escada = { id, mesh: escadaMesh, ax, az, bx, bz, alturaAndar, largura, nivel: configsCamera.nivel, textura: null, isEscada: true }; 
+    const escada = { id, mesh: escadaMesh, ax, az, bx, bz, alturaAndar, largura, nivel: targetNivel, textura: null, isEscada: true }; 
     reconstruirDegrausEscada(escada, largura);
     escadasConstruidas.push(escada); registrarAdicao('escada', escada, escadasConstruidas); 
 }
@@ -804,15 +823,11 @@ function executarMarreta(hitObject) {
   if (escada) { removerObjetoMundo('escada', escada, escadasConstruidas); return; }
 }
 
-// ----------------------------------------------------
-// PINTURA E REMOÇÃO DE PINTURA (BORRACHA)
-// ----------------------------------------------------
 function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) { 
     const mat = new THREE.MeshLambertMaterial(); 
     if (item.tipo === 'cor') { 
         mat.color.set(item.cor); 
     } else { 
-        // CORREÇÃO PIPETA/IMPORT: Permite reconstruir textura via URL crua ou clone visual
         const tex = item.textura ? item.textura.clone() : new THREE.TextureLoader().load(item.dataUrl); 
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(repeatX, repeatY); 
@@ -831,7 +846,7 @@ function paredeQueBloqueia(x1, z1, x2, z2) { const midX = (x1+x2)/2, midZ = (z1+
 function encontrarAreaFechada(xInicial, zInicial) { const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = []; const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2; while (pilha.length && celulas.length < 50000) { const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`; if (visitados.has(chave)) continue; visitados.add(chave); if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; celulas.push(atual); [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => { const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid; if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz }); }); } return { celulas }; }
 
 // ----------------------------------------------------
-// GERENCIADOR DE VISIBILIDADE 
+// GERENCIADOR DE VISIBILIDADE (TETO 100% OCULTO)
 // ----------------------------------------------------
 function setOpacity(mesh, isTransparent, opacity) { 
     if (!mesh) return; 
@@ -850,7 +865,6 @@ function setOpacity(mesh, isTransparent, opacity) {
 
 export function atualizarVisibilidadeAndares(modoVisaoManual) {
   if (modoVisaoManual) modoVisaoAtual = modoVisaoManual; 
-  const mostrarFantasma = (modoAtivo === 'coluna'); 
   
   const alturaAtual = configsCamera.nivel * obterAltura();
   
@@ -882,7 +896,7 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
   [pisosConstruidos, escadasConstruidas].forEach(arr => { 
       arr.forEach(obj => { 
           if (obj.nivel > configsCamera.nivel) { 
-              obj.mesh.visible = true; setOpacity(obj.mesh, true, 0.35); 
+              obj.mesh.visible = false; // TETO COMPLETAMENTE REMOVIDO!
           } else { 
               obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); 
           } 

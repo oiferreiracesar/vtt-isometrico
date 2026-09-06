@@ -62,8 +62,8 @@
           <button class="tool-btn" id="btnDesfazer" title="Desfazer (Ctrl+Z)" style="background: rgba(255,255,255,0.1);">↩️</button>
           <button class="tool-btn" id="btnRefazer" title="Refazer (Ctrl+Shift+Z)" style="background: rgba(255,255,255,0.1);">↪️</button>
           <div class="divider"></div>
-          <button class="tool-btn" id="btnModoParede" title="Parede (Arraste para criar. Ctrl+Arraste = Marreta)">🧱</button>
-          <button class="tool-btn" id="btnModoCerca" title="Cerca (Delimita sem fechar cômodo)">🚧</button>
+          <button class="tool-btn" id="btnModoParede" title="Parede (Arraste para criar)">🧱</button>
+          <button class="tool-btn" id="btnModoCerca" title="Cerca (Delimita sem fechar)">🚧</button>
           <button class="tool-btn" id="btnModoRetangulo" title="Sala Retangular (Arraste)">⬜</button>
           <button class="tool-btn" id="btnModoTriangulo" title="Sala Triangular (Arraste)">🔺</button>
           <button class="tool-btn" id="btnModoOctogono" title="Sala Octogonal (Arraste)">🛑</button>
@@ -72,8 +72,9 @@
           <button class="tool-btn ativo" id="btnSairModo" title="Navegar / Selecionar">🖐️</button>
         </div>
         <div class="tool-group" style="margin-top: 8px;">
-          <button class="tool-btn" id="btnModoEscada" title="Escadas (Arraste para definir a direção)">🪜</button>
-          <button class="tool-btn" id="btnModoColuna" title="Coluna de Sustentação (Apoie varandas)">🏛️</button>
+          <button class="tool-btn" id="btnModoEscada" title="Escada Subindo (Arraste)">🪜</button>
+          <button class="tool-btn" id="btnModoEscadaBaixo" title="Escada Descendo (Arraste)">🕳️</button>
+          <button class="tool-btn" id="btnModoColuna" title="Coluna de Sustentação">🏛️</button>
           <button class="tool-btn" id="btnModoTelhado" title="Telhados (Em breve)" style="opacity: 0.5;">🏠</button>
           <button class="tool-btn" id="btnModoTerreno" title="Paisagismo (Em breve)" style="opacity: 0.5;">🌳</button>
         </div>
@@ -94,7 +95,7 @@
         </div>
       </div>
 
-      <!-- ABA 2: TABULEIRO (Agora com Gestão de Salvar/Carregar) -->
+      <!-- ABA 2: TABULEIRO -->
       <div id="panel-tabuleiro" class="sub-panel">
         <div class="hud-section">
           <h3>Tamanho do Tabuleiro</h3>
