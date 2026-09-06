@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML (Com Modal de Ajuda e atalho ESC)
+// js/ui.js - Gerenciamento da Interface HTML
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarLarguraEscada, exportarMapa, importarMapa, limparMapa } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -81,7 +81,6 @@ function carregarBancoDeAssets() {
 export function iniciarUI() {
   carregarBancoDeAssets();
 
-  // --- MODAL DE AJUDA E TECLA ESC ---
   document.getElementById('btnAjuda')?.addEventListener('click', () => {
       const modal = document.getElementById('modalAjuda');
       if (modal) modal.style.display = 'flex';
@@ -95,11 +94,9 @@ export function iniciarUI() {
   window.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
           const modal = document.getElementById('modalAjuda');
-          // Se o modal estiver aberto, fecha o modal
           if (modal && modal.style.display === 'flex') {
               modal.style.display = 'none';
           } else {
-              // Se não estiver aberto, devolve a Mãozinha clicando no botão ocultamente
               const btnMaozinha = document.getElementById('btnSairModo');
               if (btnMaozinha) btnMaozinha.click();
           }
@@ -143,29 +140,19 @@ export function iniciarUI() {
   });
 
   document.getElementById('btnSalvarMapa')?.addEventListener('click', exportarMapa);
-  
   document.getElementById('btnCarregarMapa')?.addEventListener('click', () => document.getElementById('inputCarregarMapa').click());
   document.getElementById('inputCarregarMapa')?.addEventListener('change', e => {
       const file = e.target.files[0];
       if(!file) return;
       const reader = new FileReader();
       reader.onload = ev => {
-          try {
-              const dados = JSON.parse(ev.target.result);
-              importarMapa(dados);
-          } catch(err) {
-              showAviso("Erro ao ler o arquivo. O mapa pode estar corrompido.");
-          }
+          try { const dados = JSON.parse(ev.target.result); importarMapa(dados); } 
+          catch(err) { showAviso("Erro ao ler o arquivo. O mapa pode estar corrompido."); }
       };
-      reader.readAsText(file);
-      e.target.value = ''; 
+      reader.readAsText(file); e.target.value = ''; 
   });
 
-  document.getElementById('btnLimparMapa')?.addEventListener('click', () => {
-      if(confirm("Tem certeza que deseja demolir TODO O TABULEIRO? Isso não pode ser desfeito!")) {
-          limparMapa();
-      }
-  });
+  document.getElementById('btnLimparMapa')?.addEventListener('click', () => { if(confirm("Tem certeza que deseja demolir TODO O TABULEIRO? Isso não pode ser desfeito!")) limparMapa(); });
 
   document.getElementById('btnDesfazer')?.addEventListener('click', desfazer);
   document.getElementById('btnRefazer')?.addEventListener('click', refazer);
@@ -187,11 +174,14 @@ export function iniciarUI() {
   
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
-  
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
+  
+  // ATIVAMOS O BOTÃO DE TELHADO!
+  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Arraste para cobrir as suas salas.'));
+  
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala ou escada para ver opções.'));
 
-  const botoesFuturos = ['btnModoTelhado', 'btnModoTerreno'];
+  const botoesFuturos = ['btnModoTerreno'];
   botoesFuturos.forEach(id => { document.getElementById(id)?.addEventListener('click', () => showAviso("Em breve!")); });
 
   document.getElementById('btnRedimensionarMapa')?.addEventListener('click', () => {
