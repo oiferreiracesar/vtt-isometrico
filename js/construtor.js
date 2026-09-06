@@ -1,4 +1,4 @@
-// js/construtor.js - Motor Completo: Telhados em Linha (Gable Roof), Pads no Teto e Save Seguro
+// js/construtor.js - Motor Completo: Telhados em Rampa (Liso), Pads no Teto e Save Seguro
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
@@ -54,21 +54,21 @@ const materialPreviaEscada = new THREE.MeshBasicMaterial({ color: 0x4ade80, tran
 
 const cacheTexturas = {}; 
 
-// A NOVA GEOMETRIA DO TELHADO (Triângulo Perfeito 1x1x1 alinhado à cumeeira)
-const geoTelhadoBase = new THREE.CylinderGeometry(1, 1, 1, 3);
-geoTelhadoBase.rotateX(Math.PI / 2);
-geoTelhadoBase.scale(1 / Math.sqrt(3), 1 / 1.5, 1);
-geoTelhadoBase.translate(0, -1/6, 0);
-geoTelhadoBase.computeVertexNormals();
-const previaTelhado = new THREE.Mesh(geoTelhadoBase, materialPrevia.clone());
-previaTelhado.visible = false; scene.add(previaTelhado);
+const previaTelhado = new THREE.Group();
+const previaTelhadoMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materialPrevia.clone());
+previaTelhado.add(previaTelhadoMesh);
+previaTelhado.visible = false; 
+scene.add(previaTelhado);
 
 export function toggleTelhadosGlobais(visivel) { telhadosVisiveisGlobais = visivel; atualizarVisibilidadeAndares(); }
 
 function telhadoIntersectaParede(telhado, parede) {
-    const midX = (parede.ax + parede.bx) / 2; const midZ = (parede.az + parede.bz) / 2;
-    const dist = distanciaPontoSegmento(midX, midZ, telhado.ax, telhado.az, telhado.bx, telhado.bz);
-    return dist < (telhado.largura / 2 + 0.25);
+    const tMinX = Math.min(telhado.ax, telhado.bx) - telhado.largura/2; const tMaxX = Math.max(telhado.ax, telhado.bx) + telhado.largura/2;
+    const tMinZ = Math.min(telhado.az, telhado.bz) - telhado.largura/2; const tMaxZ = Math.max(telhado.az, telhado.bz) + telhado.largura/2;
+    const pMinX = Math.min(parede.ax, parede.bx); const pMaxX = Math.max(parede.ax, parede.bx);
+    const pMinZ = Math.min(parede.az, parede.bz); const pMaxZ = Math.max(parede.az, parede.bz);
+    const margem = 0.1;
+    return (tMaxX + margem >= pMinX && tMinX - margem <= pMaxX && tMaxZ + margem >= pMinZ && tMinZ - margem <= pMaxZ);
 }
 
 function resetEmissive(mesh) {
@@ -96,17 +96,6 @@ function getSafeMaterialArray(mesh) {
     return arr;
 }
 
-function extrairMateriais(mesh) {
-    if (!mesh || !mesh.material) return [];
-    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    return mats.map(m => {
-        if (!m) return { tipo: 'cor', cor: '#8a7550' }; 
-        if (m.map && m.map.image) return { tipo: 'imagem', dataUrl: m.map.image.src || m.map.image.currentSrc };
-        if (m.color) return { tipo: 'cor', cor: '#' + m.color.getHexString() };
-        return { tipo: 'cor', cor: '#ffffff' };
-    });
-}
-
 function extrairMaterialEscada(escada) {
     if (escada.mesh.children.length > 0) {
         const m = escada.mesh.children[0].material;
@@ -114,40 +103,6 @@ function extrairMaterialEscada(escada) {
         if (m && m.color) return { tipo: 'cor', cor: '#' + m.color.getHexString() };
     }
     return { tipo: 'cor', cor: '#8a7550' };
-}
-
-function aplicarMateriaisImportados(mesh, matDataArray, objectType) {
-    if (!matDataArray || matDataArray.length === 0 || !mesh) return;
-    const materiais = matDataArray.map(data => {
-        if (!data) return new THREE.MeshLambertMaterial({ color: '#ffffff' });
-        if (data.tipo === 'imagem' && data.dataUrl) {
-            let tex = cacheTexturas[data.dataUrl];
-            if (!tex) { tex = new THREE.TextureLoader().load(data.dataUrl); tex.colorSpace = THREE.SRGBColorSpace; cacheTexturas[data.dataUrl] = tex; }
-            const cloneTex = tex.clone(); cloneTex.needsUpdate = true; cloneTex.wrapS = cloneTex.wrapT = THREE.RepeatWrapping;
-            return new THREE.MeshLambertMaterial({ map: cloneTex, color: 0xffffff });
-        } else { return new THREE.MeshLambertMaterial({ color: data.cor || '#ffffff' }); }
-    });
-
-    const groupsLen = mesh.geometry.groups && mesh.geometry.groups.length > 0 ? mesh.geometry.groups.length : 1;
-    if (groupsLen > 1) {
-        const padded = []; const baseMat = materiais[0] || new THREE.MeshLambertMaterial({ color: '#ffffff' });
-        for(let i = 0; i < groupsLen; i++) padded.push(materiais[i] || baseMat.clone());
-        mesh.material = padded;
-    } else { mesh.material = materiais[0]; }
-
-    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    mats.forEach((mat, faceIndex) => {
-        if (mat && mat.map && mesh.geometry) {
-            let repeatX = 1, repeatY = 1;
-            if (objectType === 'piso' || objectType === 'escada') { repeatX = configMapa.tamanhoGrid; repeatY = configMapa.tamanhoGrid; } 
-            else if (mesh.geometry === geoTelhadoBase || mesh.geometry.type === 'CylinderGeometry') { repeatX = Math.max(1, mesh.scale.x / configMapa.tamanhoGrid) * 2; repeatY = Math.max(1, mesh.scale.z / configMapa.tamanhoGrid); } 
-            else if (mesh.geometry.parameters) {
-                const { width, height, depth } = mesh.geometry.parameters;
-                if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; }
-            }
-            mat.map.repeat.set(repeatX, repeatY); mat.needsUpdate = true;
-        }
-    });
 }
 
 export function limparMapa() {
@@ -160,16 +115,39 @@ export function limparMapa() {
 export function exportarMapa() {
     const dados = {
         versao: 4, 
-        pisos: pisosConstruidos.map(p => ({ x: p.x, z: p.z, nivel: p.nivel, materiais: extrairMateriais(p.mesh) })),
-        pilares: pilaresConstruidos.map(p => ({ x: p.x, z: p.z, altura: p.altura, nivel: p.nivel, isCerca: p.isCerca, comodoId: p.comodoId, materiais: extrairMateriais(p.mesh) })),
-        paredes: paredesConstruidas.map(p => ({ ax: p.ax, az: p.az, bx: p.bx, bz: p.bz, altura: p.altura, isCerca: p.isCerca, comodoId: p.comodoId, nivel: p.nivel, isPorta: p.isPorta, materiais: extrairMateriais(p.mesh) })),
-        colunas: colunasSustentacao.map(c => ({ x: c.x, z: c.z, altura: c.altura, nivel: c.nivel, materiais: extrairMateriais(c.mesh) })),
+        pisos: pisosConstruidos.map(p => ({ x: p.x, z: p.z, nivel: p.nivel, materiais: getSafeMaterialArray(p.mesh).map(m => ({ tipo: m.map ? 'imagem' : 'cor', cor: m.color ? '#' + m.color.getHexString() : '#ffffff', dataUrl: m.map ? (m.map.image.src || m.map.image.currentSrc) : null })) })),
+        pilares: pilaresConstruidos.map(p => ({ x: p.x, z: p.z, altura: p.altura, nivel: p.nivel, isCerca: p.isCerca, comodoId: p.comodoId, materiais: getSafeMaterialArray(p.mesh).map(m => ({ tipo: m.map ? 'imagem' : 'cor', cor: m.color ? '#' + m.color.getHexString() : '#ffffff', dataUrl: m.map ? (m.map.image.src || m.map.image.currentSrc) : null })) })),
+        paredes: paredesConstruidas.map(p => ({ ax: p.ax, az: p.az, bx: p.bx, bz: p.bz, altura: p.altura, isCerca: p.isCerca, comodoId: p.comodoId, nivel: p.nivel, isPorta: p.isPorta, materiais: getSafeMaterialArray(p.mesh).map(m => ({ tipo: m.map ? 'imagem' : 'cor', cor: m.color ? '#' + m.color.getHexString() : '#ffffff', dataUrl: m.map ? (m.map.image.src || m.map.image.currentSrc) : null })) })),
+        colunas: colunasSustentacao.map(c => ({ x: c.x, z: c.z, altura: c.altura, nivel: c.nivel, materiais: getSafeMaterialArray(c.mesh).map(m => ({ tipo: m.map ? 'imagem' : 'cor', cor: m.color ? '#' + m.color.getHexString() : '#ffffff', dataUrl: m.map ? (m.map.image.src || m.map.image.currentSrc) : null })) })),
         escadas: escadasConstruidas.map(e => ({ ax: e.ax, az: e.az, bx: e.bx, bz: e.bz, alturaAndar: e.alturaAndar, largura: e.largura, nivel: e.nivel, material: extrairMaterialEscada(e) })),
-        telhados: telhadosConstruidos.map(t => ({ ax: t.ax, az: t.az, bx: t.bx, bz: t.bz, alturaTelhado: t.alturaTelhado, largura: t.largura, nivel: t.nivel, materiais: extrairMateriais(t.mesh) }))
+        telhados: telhadosConstruidos.map(t => ({ ax: t.ax, az: t.az, bx: t.bx, bz: t.bz, alturaTelhado: t.alturaTelhado, largura: t.largura, nivel: t.nivel, material: extrairMaterialEscada(t) }))
     };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dados));
     const downloadNode = document.createElement('a'); downloadNode.setAttribute("href", dataStr); downloadNode.setAttribute("download", "masmorra_decorada.json");
     document.body.appendChild(downloadNode); downloadNode.click(); downloadNode.remove(); showAviso("Projeto exportado com sucesso!");
+}
+
+function aplicarMaterialObjeto(mesh, matDataArray) {
+    if (!matDataArray || matDataArray.length === 0 || !mesh) return;
+    const materiais = matDataArray.map(data => {
+        if (!data) return new THREE.MeshLambertMaterial({ color: '#ffffff' });
+        if (data.tipo === 'imagem' && data.dataUrl) {
+            let tex = cacheTexturas[data.dataUrl];
+            if (!tex) { tex = new THREE.TextureLoader().load(data.dataUrl); tex.colorSpace = THREE.SRGBColorSpace; cacheTexturas[data.dataUrl] = tex; }
+            const cloneTex = tex.clone(); cloneTex.needsUpdate = true; cloneTex.wrapS = cloneTex.wrapT = THREE.RepeatWrapping;
+            return new THREE.MeshLambertMaterial({ map: cloneTex, color: 0xffffff });
+        } else { return new THREE.MeshLambertMaterial({ color: data.cor || '#ffffff' }); }
+    });
+    const groupsLen = mesh.geometry.groups && mesh.geometry.groups.length > 0 ? mesh.geometry.groups.length : 1;
+    if (groupsLen > 1) { const padded = []; const baseMat = materiais[0] || new THREE.MeshLambertMaterial({ color: '#ffffff' }); for(let i = 0; i < groupsLen; i++) padded.push(materiais[i] || baseMat.clone()); mesh.material = padded; } else { mesh.material = materiais[0]; }
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    mats.forEach((mat, faceIndex) => {
+        if (mat && mat.map && mesh.geometry && mesh.geometry.parameters) {
+            const { width, height, depth } = mesh.geometry.parameters;
+            if (faceIndex === 0 || faceIndex === 1) { mat.map.repeat.set(depth, height); } else if (faceIndex === 2 || faceIndex === 3) { mat.map.repeat.set(width, depth); } else { mat.map.repeat.set(width, height); }
+            mat.needsUpdate = true;
+        }
+    });
 }
 
 export function importarMapa(dados) {
@@ -178,12 +156,12 @@ export function importarMapa(dados) {
     if (dados.pilares) dados.pilares.forEach(p => { if(p.comodoId) comodosIds.add(p.comodoId); });
     comodosIds.forEach(id => comodosConstruidos.push({ id, paredes: [], pilares: [] }));
 
-    if(dados.pisos) dados.pisos.forEach(p => { configsCamera.nivel = p.nivel; aplicarPiso(p.x, p.z, { tipo: 'cor', cor: '#8a7550' }); const piso = pisosConstruidos.find(tile => Math.abs(tile.x - p.x) < 0.01 && Math.abs(tile.z - p.z) < 0.01 && tile.nivel === p.nivel); if(piso) aplicarMateriaisImportados(piso.mesh, p.materiais, 'piso'); });
-    if(dados.pilares) dados.pilares.forEach(p => { configsCamera.nivel = p.nivel; const pilar = obterOuCriarPilar(p.x, p.z, p.altura, p.isCerca, p.comodoId); if(pilar) aplicarMateriaisImportados(pilar.mesh, p.materiais, 'pilar'); });
-    if(dados.paredes) dados.paredes.forEach(p => { configsCamera.nivel = p.nivel; criarSegmentoParede(p.ax, p.az, p.bx, p.bz, p.altura, p.isCerca, p.comodoId); const parede = paredesConstruidas.find(w => Math.abs(w.ax - p.ax) < 0.01 && Math.abs(w.az - p.az) < 0.01 && Math.abs(w.bx - p.bx) < 0.01 && Math.abs(w.bz - p.bz) < 0.01 && w.nivel === p.nivel); if (parede) { aplicarMateriaisImportados(parede.mesh, p.materiais, 'parede'); if (p.isPorta) { parede.isPorta = true; const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 }); parede.mesh.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta]; } } });
-    if(dados.colunas) dados.colunas.forEach(c => { configsCamera.nivel = c.nivel; criarColunaSustentacao(c.x, c.z, c.altura); const col = colunasSustentacao.find(col => Math.abs(col.x - c.x) < 0.01 && Math.abs(col.z - c.z) < 0.01 && col.nivel === c.nivel); if(col) aplicarMateriaisImportados(col.mesh, c.materiais, 'coluna'); });
-    if(dados.escadas) dados.escadas.forEach(e => { configsCamera.nivel = e.nivel; criarEscada(e.ax, e.az, e.bx, e.bz, e.alturaAndar, e.largura, e.nivel); const escada = escadasConstruidas.find(s => Math.abs(s.ax - e.ax) < 0.01 && Math.abs(s.az - e.az) < 0.01 && Math.abs(s.bx - e.bx) < 0.01 && Math.abs(s.bz - e.bz) < 0.01 && s.nivel === e.nivel); if (escada && e.material) { escada.textura = { tipo: e.material.tipo, cor: e.material.cor, dataUrl: e.material.dataUrl }; escada.mesh.children.forEach(child => aplicarMateriaisImportados(child, [e.material], 'escada')); } });
-    if(dados.telhados) dados.telhados.forEach(t => { configsCamera.nivel = t.nivel; criarTelhado(t.ax, t.az, t.bx, t.bz, t.alturaTelhado, t.largura || configMapa.tamanhoGrid); const tel = telhadosConstruidos[telhadosConstruidos.length - 1]; if(tel) aplicarMateriaisImportados(tel.mesh, t.materiais, 'telhado'); });
+    if(dados.pisos) dados.pisos.forEach(p => { configsCamera.nivel = p.nivel; aplicarPiso(p.x, p.z, { tipo: 'cor', cor: '#8a7550' }); const piso = pisosConstruidos.find(tile => Math.abs(tile.x - p.x) < 0.01 && Math.abs(tile.z - p.z) < 0.01 && tile.nivel === p.nivel); if(piso) aplicarMaterialObjeto(piso.mesh, p.materiais); });
+    if(dados.pilares) dados.pilares.forEach(p => { configsCamera.nivel = p.nivel; const pilar = obterOuCriarPilar(p.x, p.z, p.altura, p.isCerca, p.comodoId); if(pilar) aplicarMaterialObjeto(pilar.mesh, p.materiais); });
+    if(dados.paredes) dados.paredes.forEach(p => { configsCamera.nivel = p.nivel; criarSegmentoParede(p.ax, p.az, p.bx, p.bz, p.altura, p.isCerca, p.comodoId); const parede = paredesConstruidas.find(w => Math.abs(w.ax - p.ax) < 0.01 && Math.abs(w.az - p.az) < 0.01 && Math.abs(w.bx - p.bx) < 0.01 && Math.abs(w.bz - p.bz) < 0.01 && w.nivel === p.nivel); if (parede) { aplicarMaterialObjeto(parede.mesh, p.materiais); if (p.isPorta) { parede.isPorta = true; const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 }); parede.mesh.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta]; } } });
+    if(dados.colunas) dados.colunas.forEach(c => { configsCamera.nivel = c.nivel; criarColunaSustentacao(c.x, c.z, c.altura); const col = colunasSustentacao.find(col => Math.abs(col.x - c.x) < 0.01 && Math.abs(col.z - c.z) < 0.01 && col.nivel === c.nivel); if(col) aplicarMaterialObjeto(col.mesh, c.materiais); });
+    if(dados.escadas) dados.escadas.forEach(e => { configsCamera.nivel = e.nivel; criarEscada(e.ax, e.az, e.bx, e.bz, e.alturaAndar, e.largura, e.nivel); const escada = escadasConstruidas.find(s => Math.abs(s.ax - e.ax) < 0.01 && Math.abs(s.az - e.az) < 0.01 && Math.abs(s.bx - e.bx) < 0.01 && Math.abs(s.bz - e.bz) < 0.01 && s.nivel === e.nivel); if (escada && e.material) { escada.textura = { tipo: e.material.tipo, cor: e.material.cor, dataUrl: e.material.dataUrl }; escada.mesh.children.forEach(child => aplicarMaterialObjeto(child, [e.material])); } });
+    if(dados.telhados) dados.telhados.forEach(t => { configsCamera.nivel = t.nivel; criarTelhado(t.ax, t.az, t.bx, t.bz, t.alturaTelhado, t.largura || configMapa.tamanhoGrid, t.nivel); const tel = telhadosConstruidos[telhadosConstruidos.length - 1]; if(tel && t.material) { tel.textura = { tipo: t.material.tipo, cor: t.material.cor, dataUrl: t.material.dataUrl }; tel.mesh.children.forEach(child => aplicarMaterialObjeto(child, [t.material])); } });
 
     configsCamera.nivel = nivelOriginal; historicoUndo.length = 0; acaoAtual = null; atualizarVisibilidadeAndares(); showAviso("Decorações carregadas com sucesso!");
 }
@@ -253,25 +231,23 @@ function raycastObjetosDoNivel(clientX, clientY) {
     const pisosF = pisosConstruidos.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh); 
     const colunasF = colunasSustentacao.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh); 
     const escadasF = []; escadasConstruidas.forEach(e => { if (e.nivel === configsCamera.nivel) escadasF.push(...e.mesh.children); }); 
-    const telhadosF = telhadosConstruidos.filter(t => t.nivel === configsCamera.nivel).map(t => t.mesh); 
+    const telhadosF = []; telhadosConstruidos.forEach(t => { if (t.nivel === configsCamera.nivel) telhadosF.push(...t.mesh.children); });
+    
     const objetosNivel = [...paredesF, ...pilaresF, ...pisosF, ...colunasF, ...escadasF, ...telhadosF]; 
     if (configsCamera.nivel === 0 && meshChaoBase) objetosNivel.push(meshChaoBase); 
     if (configsCamera.nivel < 0 && meshChaoMasmorra) objetosNivel.push(meshChaoMasmorra); 
     
-    objetosNivel.forEach(obj => {
-        if (obj && Array.isArray(obj.material)) {
-            for (let i = 0; i < obj.material.length; i++) { if (!obj.material[i]) obj.material[i] = materialParede.clone(); }
-        }
-    });
+    objetosNivel.forEach(obj => { if (obj && Array.isArray(obj.material)) { for (let i = 0; i < obj.material.length; i++) { if (!obj.material[i]) obj.material[i] = materialParede.clone(); } } });
     const hits = raycaster.intersectObjects(objetosNivel, true); 
     return hits.length ? hits[0] : null; 
 }
 
-export function setModoAtivo(modo) { modoAtivo = modo; arrastandoConstrucao = false; pontoA = null; limparSelecao(); previaMesh.visible = false; previaEscadaInicio.visible = false; previaEscadaFim.visible = false; previaTelhado.visible = false; cursor3D.visible = false; const divMedida = document.getElementById('cursor-medida'); if(divMedida) divMedida.style.display = 'none'; }
-function limparSelecao() { if (comodoSelecionado) comodoSelecionado.paredes.forEach(p => resetEmissive(p.mesh)); if (escadaSelecionada) escadaSelecionada.mesh.children.forEach(c => resetEmissive(c)); if (telhadoSelecionado) resetEmissive(telhadoSelecionado.mesh); comodoSelecionado = null; escadaSelecionada = null; telhadoSelecionado = null; movendoSelecionado = false; arrastandoSeta = null; esconderGizmo(); grupoSetas.visible = false; }
+export function setModoAtivo(modo) { modoAtivo = modo; arrastandoConstrucao = false; pontoA = null; limparSelecao(); previaMesh.visible = false; previaTelhado.visible = false; previaEscadaInicio.visible = false; previaEscadaFim.visible = false; cursor3D.visible = false; const divMedida = document.getElementById('cursor-medida'); if(divMedida) divMedida.style.display = 'none'; }
+function limparSelecao() { if (comodoSelecionado) comodoSelecionado.paredes.forEach(p => resetEmissive(p.mesh)); if (escadaSelecionada) escadaSelecionada.mesh.children.forEach(c => resetEmissive(c)); if (telhadoSelecionado) telhadoSelecionado.mesh.children.forEach(c => resetEmissive(c)); comodoSelecionado = null; escadaSelecionada = null; telhadoSelecionado = null; movendoSelecionado = false; arrastandoSeta = null; esconderGizmo(); grupoSetas.visible = false; }
 function atualizarSetasResize() { if (!comodoSelecionado) { grupoSetas.visible = false; return; } let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity; comodoSelecionado.paredes.forEach(p => { minX = Math.min(minX, p.ax, p.bx); maxX = Math.max(maxX, p.ax, p.bx); minZ = Math.min(minZ, p.az, p.bz); maxZ = Math.max(maxZ, p.az, p.bz); }); const cx = (minX + maxX) / 2; const cz = (minZ + maxZ) / 2; const h = (configsCamera.nivel * obterAltura()) + (obterAltura() / 2); setaN.position.set(cx, h, minZ - 1.2); setaS.position.set(cx, h, maxZ + 1.2); setaE.position.set(maxX + 1.2, h, cz); setaW.position.set(minX - 1.2, h, cz); grupoSetas.visible = true; }
 
 export function iniciarArrasteSelecionado() { if (!comodoSelecionado && !escadaSelecionada && !telhadoSelecionado) return; movendoSelecionado = true; esconderGizmo(); grupoSetas.visible = false; iniciarAcao(); pontoA = null; showAviso("Colado no mouse. Clique para soltar!"); }
+
 export function girarSelecionado(sentido) { 
     if (comodoSelecionado) { 
         let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity; 
@@ -283,30 +259,17 @@ export function girarSelecionado(sentido) {
     } else if (escadaSelecionada) { 
         const angulo = sentido === 'esq' ? Math.PI / 2 : -Math.PI / 2; escadaSelecionada.mesh.rotation.y += angulo; 
     } else if (telhadoSelecionado) { 
-        const cx = (telhadoSelecionado.ax + telhadoSelecionado.bx) / 2; const cz = (telhadoSelecionado.az + telhadoSelecionado.bz) / 2;
-        const angulo = sentido === 'esq' ? Math.PI / 2 : -Math.PI / 2;
-        const cos = Math.round(Math.cos(angulo)), sin = Math.round(Math.sin(angulo));
-        const nx1 = cx + (telhadoSelecionado.ax - cx) * cos - (telhadoSelecionado.az - cz) * sin;
-        const nz1 = cz + (telhadoSelecionado.ax - cx) * sin + (telhadoSelecionado.az - cz) * cos;
-        const nx2 = cx + (telhadoSelecionado.bx - cx) * cos - (telhadoSelecionado.bz - cz) * sin;
-        const nz2 = cz + (telhadoSelecionado.bx - cx) * sin + (telhadoSelecionado.bz - cz) * cos;
-        telhadoSelecionado.ax = nx1; telhadoSelecionado.az = nz1; telhadoSelecionado.bx = nx2; telhadoSelecionado.bz = nz2;
-        telhadoSelecionado.mesh.rotation.y += angulo;
+        const angulo = sentido === 'esq' ? Math.PI / 2 : -Math.PI / 2; telhadoSelecionado.mesh.rotation.y += angulo; 
     } 
 }
 
 export function alterarDimensaoGizmo(direcao) { 
     if (escadaSelecionada) { 
         const newLargura = Math.max(configMapa.tamanhoGrid, escadaSelecionada.largura + (direcao * configMapa.tamanhoGrid)); 
-        if (newLargura === escadaSelecionada.largura) return; 
-        iniciarAcao(); reconstruirDegrausEscada(escadaSelecionada, newLargura); finalizarAcao(); showAviso(`Largura alterada para ${newLargura / configMapa.tamanhoGrid} quadrados.`); 
+        if (newLargura === escadaSelecionada.largura) return; iniciarAcao(); reconstruirDegrausEscada(escadaSelecionada, newLargura); finalizarAcao(); showAviso(`Largura alterada para ${newLargura / configMapa.tamanhoGrid} quadrados.`); 
     } else if (telhadoSelecionado) { 
         const novaLargura = Math.max(configMapa.tamanhoGrid, telhadoSelecionado.largura + (direcao * configMapa.tamanhoGrid)); 
-        if (novaLargura === telhadoSelecionado.largura) return; 
-        iniciarAcao(); telhadoSelecionado.largura = novaLargura; 
-        const comp = Math.max(0.1, Math.hypot(telhadoSelecionado.bx - telhadoSelecionado.ax, telhadoSelecionado.bz - telhadoSelecionado.az)); 
-        telhadoSelecionado.mesh.scale.set(novaLargura + 0.5, telhadoSelecionado.alturaTelhado, comp + 0.5); 
-        finalizarAcao(); showAviso(`Largura do telhado alterada.`); 
+        if (novaLargura === telhadoSelecionado.largura) return; iniciarAcao(); reconstruirRampaTelhado(telhadoSelecionado, novaLargura); finalizarAcao(); showAviso(`Largura do telhado alterada.`); 
     } 
 }
 
@@ -315,10 +278,7 @@ export function alterarAlturaGizmo(direcao) {
         const novaAltura = Math.max(0.5, telhadoSelecionado.alturaTelhado + (direcao * 0.5));
         if (novaAltura === telhadoSelecionado.alturaTelhado) return;
         iniciarAcao(); telhadoSelecionado.alturaTelhado = novaAltura;
-        const comp = Math.max(0.1, Math.hypot(telhadoSelecionado.bx - telhadoSelecionado.ax, telhadoSelecionado.bz - telhadoSelecionado.az));
-        telhadoSelecionado.mesh.scale.set(telhadoSelecionado.largura + 0.5, novaAltura, comp + 0.5);
-        const alturaBase = (telhadoSelecionado.nivel * obterAltura()) + obterAltura();
-        telhadoSelecionado.mesh.position.y = alturaBase + (novaAltura / 2);
+        reconstruirRampaTelhado(telhadoSelecionado, telhadoSelecionado.largura);
         finalizarAcao(); showAviso(`Altura do telhado alterada para ${novaAltura}m.`);
     }
 }
@@ -334,10 +294,7 @@ function criarSegmentoParede(ax, az, bx, bz, altura, isCerca, comodoId = null) {
   if (existe) return; 
 
   const colideTelhado = telhadosConstruidos.filter(t => t.nivel === configsCamera.nivel - 1 && telhadoIntersectaParede(t, {ax, az, bx, bz}));
-  if (colideTelhado.length > 0 && !isCerca) {
-      colideTelhado.forEach(t => removerObjetoMundo('telhado', t, telhadosConstruidos));
-      showAviso("🏗️ Telhado demolido automaticamente para dar espaço ao segundo andar!");
-  }
+  if (colideTelhado.length > 0 && !isCerca) { colideTelhado.forEach(t => removerObjetoMundo('telhado', t, telhadosConstruidos)); showAviso("🏗️ Telhado demolido automaticamente para dar espaço ao segundo andar!"); }
 
   const dx = bx - ax, dz = bz - az; const compTotal = Math.hypot(dx, dz); if (compTotal < 0.05) return; 
   const pilarA = obterOuCriarPilar(ax, az, altura, isCerca, comodoId); const pilarB = obterOuCriarPilar(bx, bz, altura, isCerca, comodoId); 
@@ -354,21 +311,45 @@ function criarTriangulo(x1, z1, x2, z2, altura, comodoId = null) { const minX = 
 function criarOctogono(x1, z1, x2, z2, altura, comodoId = null) { const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2); const w = maxX - minX, d = maxZ - minZ, offX = w * 0.3, offZ = d * 0.3; criarPoligonoDeParedes([{ x: minX + offX, z: minZ }, { x: maxX - offX, z: minZ }, { x: maxX, z: minZ + offZ }, { x: maxX, z: maxZ - offZ }, { x: maxX - offX, z: maxZ }, { x: minX + offX, z: maxZ }, { x: minX, z: maxZ - offZ }, { x: minX, z: minZ + offZ }], altura, comodoId); }
 function criarColunaSustentacao(x, z, altura) { const alturaBase = configsCamera.nivel * altura; const materiais = [materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone(), materialParede.clone()]; const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, altura, 0.4), materiais); mesh.position.set(x, alturaBase + altura / 2, z); scene.add(mesh); const coluna = { mesh, x, z, nivel: configsCamera.nivel, altura }; colunasSustentacao.push(coluna); registrarAdicao('coluna', coluna, colunasSustentacao); }
 
+// A MÁGICA DO TELHADO EM RAMPA (SHED ROOF) IGUAL À ESCADA
 function criarTelhado(ax, az, bx, bz, alturaTelhado = 2.0, largura = configMapa.tamanhoGrid, targetNivel = configsCamera.nivel) { 
-    const dx = bx - ax, dz = bz - az; const comp = Math.max(0.1, Math.hypot(dx, dz)); 
-    const matArray = [materialTelhadoPadrão.clone(), materialParede.clone(), materialParede.clone()];
-    const mesh = new THREE.Mesh(geoTelhadoBase, matArray); 
-    mesh.scale.set(largura + 0.5, alturaTelhado, comp + 0.5); 
-    const alturaBase = (targetNivel * obterAltura()) + obterAltura(); 
-    mesh.position.set((ax + bx) / 2, alturaBase + (alturaTelhado / 2), (az + bz) / 2); 
-    mesh.rotation.y = Math.atan2(dx, dz); scene.add(mesh); 
-    const telhado = { mesh, ax, az, bx, bz, alturaTelhado, largura, nivel: targetNivel, isTelhado: true }; 
+    const dx = bx - ax, dz = bz - az; const comp = Math.hypot(dx, dz); if (comp < 0.5) return; 
+    const telhadoMesh = new THREE.Group(); 
+    const id = Date.now() + Math.random(); 
+    const telhado = { id, mesh: telhadoMesh, ax, az, bx, bz, alturaTelhado, largura, nivel: targetNivel, textura: null, isTelhado: true }; 
+    reconstruirRampaTelhado(telhado, largura);
     telhadosConstruidos.push(telhado); registrarAdicao('telhado', telhado, telhadosConstruidos); 
+}
+
+export function reconstruirRampaTelhado(telhado, novaLargura) {
+    telhado.largura = novaLargura;
+    while(telhado.mesh.children.length > 0) { telhado.mesh.remove(telhado.mesh.children[0]); }
+    const dx = telhado.bx - telhado.ax, dz = telhado.bz - telhado.az; 
+    const comp = Math.max(0.1, Math.hypot(dx, dz)); 
+    const angle = Math.atan2(dx, dz); 
+    const pitch = Math.atan2(telhado.alturaTelhado, comp);
+    const slopeLength = Math.hypot(comp, telhado.alturaTelhado);
+    const espessura = 0.2;
+    
+    const mat = telhado.textura ? gerarMaterialPintura(telhado.textura, configMapa.tamanhoGrid, configMapa.tamanhoGrid) : materialTelhadoPadrão.clone();
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(telhado.largura, espessura, slopeLength), mat); 
+    
+    // Inclina a rampa perfeitamente de A (baixo) até B (alto)
+    mesh.rotation.x = Math.atan2(telhado.alturaTelhado, comp); 
+    mesh.position.set(0, telhado.alturaTelhado / 2, 0); 
+    telhado.mesh.add(mesh); 
+    
+    const alturaBase = (telhado.nivel * obterAltura()) + obterAltura(); 
+    telhado.mesh.position.set((telhado.ax + telhado.bx)/2, alturaBase, (telhado.az + telhado.bz)/2); 
+    telhado.mesh.rotation.y = angle; 
+    
+    if(!scene.children.includes(telhado.mesh)) scene.add(telhado.mesh);
+    if (telhadoSelecionado === telhado) { telhado.mesh.children.forEach(c => applyEmissive(c, 0x2a2a2a)); }
 }
 
 function criarEscada(ax, az, bx, bz, alturaAndar, largura = configMapa.tamanhoGrid, targetNivel = configsCamera.nivel) { const dx = bx - ax, dz = bz - az; const comp = Math.hypot(dx, dz); if (comp < 0.5) return; const escadaMesh = new THREE.Group(); const id = Date.now() + Math.random(); const escada = { id, mesh: escadaMesh, ax, az, bx, bz, alturaAndar, largura, nivel: targetNivel, textura: null, isEscada: true }; reconstruirDegrausEscada(escada, largura); escadasConstruidas.push(escada); registrarAdicao('escada', escada, escadasConstruidas); }
 export function reconstruirDegrausEscada(escada, novaLargura) { escada.largura = novaLargura; while(escada.mesh.children.length > 0){ escada.mesh.remove(escada.mesh.children[0]); } const dx = escada.bx - escada.ax, dz = escada.bz - escada.az; const comp = Math.hypot(dx, dz); const degraus = Math.max(3, Math.floor(comp / (configMapa.tamanhoGrid / 2))); const angle = Math.atan2(dx, dz); for (let i = 0; i < degraus; i++) { const stepD = comp / degraus, stepH = escada.alturaAndar / degraus; const mat = escada.textura ? gerarMaterialPintura(escada.textura, configMapa.tamanhoGrid, configMapa.tamanhoGrid) : materialPiso.clone(); const mesh = new THREE.Mesh(new THREE.BoxGeometry(escada.largura - 0.002, stepH * (i + 1), stepD - 0.002), mat); mesh.position.set(0, (stepH * (i + 1)) / 2 + 0.001, (i * stepD) - comp/2 + stepD/2); escada.mesh.add(mesh); } const alturaBase = escada.nivel * escada.alturaAndar; escada.mesh.position.set((escada.ax+escada.bx)/2, alturaBase, (escada.az+escada.bz)/2); escada.mesh.rotation.y = angle; if(!scene.children.includes(escada.mesh)) scene.add(escada.mesh); if (escadaSelecionada === escada) { escada.mesh.children.forEach(c => applyEmissive(c, 0x2a2a2a)); } }
-function executarMarreta(hitObject) { if (!hitObject || hitObject === meshChaoBase || hitObject === meshChaoMasmorra) return; const isPiso = pisosConstruidos.some(p => p.mesh === hitObject); const isParedeMode = ['parede', 'cerca', 'retangulo', 'triangulo', 'octogono', 'telhado'].includes(modoAtivo); if (isParedeMode && isPiso) return; const telhado = telhadosConstruidos.find(t => t.mesh === hitObject); if (telhado) { removerObjetoMundo('telhado', telhado, telhadosConstruidos); return; } const parede = paredesConstruidas.find(p => p.mesh === hitObject); if (parede) { removerObjetoMundo('parede', parede, paredesConstruidas); limparPilaresSoltos(); return; } const pilar = pilaresConstruidos.find(p => p.mesh === hitObject); if (pilar) { const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilar || p.pilarB === pilar); attachedWalls.forEach(p => removerObjetoMundo('parede', p, paredesConstruidas)); limparPilaresSoltos(); return; } const piso = pisosConstruidos.find(p => p.mesh === hitObject); if (piso) { removerObjetoMundo('piso', piso, pisosConstruidos); return; } const coluna = colunasSustentacao.find(p => p.mesh === hitObject); if (coluna) { removerObjetoMundo('coluna', coluna, colunasSustentacao); return; } const escada = escadasConstruidas.find(e => e.mesh === hitObject.parent); if (escada) { removerObjetoMundo('escada', escada, escadasConstruidas); return; } }
+function executarMarreta(hitObject) { if (!hitObject || hitObject === meshChaoBase || hitObject === meshChaoMasmorra) return; const isPiso = pisosConstruidos.some(p => p.mesh === hitObject); const isParedeMode = ['parede', 'cerca', 'retangulo', 'triangulo', 'octogono', 'telhado'].includes(modoAtivo); if (isParedeMode && isPiso) return; const telhado = telhadosConstruidos.find(t => t.mesh === hitObject.parent); if (telhado) { removerObjetoMundo('telhado', telhado, telhadosConstruidos); return; } const parede = paredesConstruidas.find(p => p.mesh === hitObject); if (parede) { removerObjetoMundo('parede', parede, paredesConstruidas); limparPilaresSoltos(); return; } const pilar = pilaresConstruidos.find(p => p.mesh === hitObject); if (pilar) { const attachedWalls = paredesConstruidas.filter(p => p.pilarA === pilar || p.pilarB === pilar); attachedWalls.forEach(p => removerObjetoMundo('parede', p, paredesConstruidas)); limparPilaresSoltos(); return; } const piso = pisosConstruidos.find(p => p.mesh === hitObject); if (piso) { removerObjetoMundo('piso', piso, pisosConstruidos); return; } const coluna = colunasSustentacao.find(p => p.mesh === hitObject); if (coluna) { removerObjetoMundo('coluna', coluna, colunasSustentacao); return; } const escada = escadasConstruidas.find(e => e.mesh === hitObject.parent); if (escada) { removerObjetoMundo('escada', escada, escadasConstruidas); return; } }
 
 canvas?.addEventListener('dblclick', e => { const hit = raycastPlanoBase(e.clientX, e.clientY); if (hit) { orbitAlvo.x = hit.point.x; orbitAlvo.z = hit.point.z; atualizarCamera(); showAviso("Câmera focada!"); } });
 
@@ -394,8 +375,8 @@ canvas?.addEventListener('pointerdown', e => {
       if (hitAll && hitAll.object !== meshChaoBase && hitAll.object !== meshChaoMasmorra) {
           const isEscada = escadasConstruidas.find(esc => esc.mesh === hitAll.object.parent);
           if (isEscada) { limparSelecao(); escadaSelecionada = isEscada; escadaSelecionada.mesh.children.forEach(c => applyEmissive(c, 0x2a2a2a)); mostrarGizmo(e.clientX, e.clientY, 'escada'); return; }
-          const isTelhado = telhadosConstruidos.find(t => t.mesh === hitAll.object);
-          if (isTelhado) { limparSelecao(); telhadoSelecionado = isTelhado; applyEmissive(telhadoSelecionado.mesh, 0x2a2a2a); mostrarGizmo(e.clientX, e.clientY, 'telhado'); return; }
+          const isTelhado = telhadosConstruidos.find(t => t.mesh === hitAll.object.parent);
+          if (isTelhado) { limparSelecao(); telhadoSelecionado = isTelhado; telhadoSelecionado.mesh.children.forEach(c => applyEmissive(c, 0x2a2a2a)); mostrarGizmo(e.clientX, e.clientY, 'telhado'); return; }
           const objClicado = paredesConstruidas.find(p => p.mesh === hitAll.object) || pilaresConstruidos.find(p => p.mesh === hitAll.object);
           if (objClicado && objClicado.comodoId) { limparSelecao(); comodoSelecionado = comodosConstruidos.find(c => c.id === objClicado.comodoId); if (comodoSelecionado) { comodoSelecionado.paredes.forEach(p => applyEmissive(p.mesh, 0x2a2a2a)); mostrarGizmo(e.clientX, e.clientY, 'comodo'); atualizarSetasResize(); return; } }
       }
@@ -434,7 +415,7 @@ canvas?.addEventListener('pointerdown', e => {
       const isParede = targetObject && paredesConstruidas.some(p => p.mesh === targetObject);
       const isPilar = targetObject && pilaresConstruidos.some(p => p.mesh === targetObject);
       const isColuna = targetObject && colunasSustentacao.some(p => p.mesh === targetObject);
-      const isTelhado = targetObject && telhadosConstruidos.some(t => t.mesh === targetObject);
+      const isTelhado = targetObject && telhadosConstruidos.some(t => t.mesh === targetObject.parent);
 
       if (e.shiftKey && !isTelhado) {
           let startX = snapCentroCelula(clickPoint.x); let startZ = snapCentroCelula(clickPoint.z);
@@ -449,7 +430,11 @@ canvas?.addEventListener('pointerdown', e => {
              celulas.forEach(c => { [['x',1],['x',-1],['z',1],['z',-1]].forEach(([eixo, dir]) => { const dx = eixo==='x' ? configMapa.tamanhoGrid * dir : 0, dz = eixo==='z' ? configMapa.tamanhoGrid * dir : 0; const p = paredeQueBloqueia(c.x, c.z, c.x + dx, c.z + dz); if (p && !p.isPorta && !p.isCerca) { const dirNorm = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z).normalize(); if (isRemocao) { removerPinturaFacePorNormal(p.mesh, dirNorm, materialParede); if (p.pilarA) removerPinturaFacePorNormal(p.pilarA.mesh, dirNorm, materialParede); if (p.pilarB) removerPinturaFacePorNormal(p.pilarB.mesh, dirNorm, materialParede); } else { pintarFacePorNormalMundial(p.mesh, dirNorm, item); if (p.pilarA) pintarFacePorNormalMundial(p.pilarA.mesh, dirNorm, item); if (p.pilarB) pintarFacePorNormalMundial(p.pilarB.mesh, dirNorm, item); } } }); });
           } else { celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); }
       } else {
-          if (isTelhado) { if (isRemocao) removerMaterialNaFace(targetObject, 0, materialTelhadoPadrão); else aplicarMaterialNaFace(targetObject, 0, item); return; }
+          if (isTelhado) { 
+              const telhado = telhadosConstruidos.find(t => t.mesh === targetObject.parent);
+              telhado.mesh.children.forEach(rampa => { registrarPintura(rampa); rampa.material = isRemocao ? materialTelhadoPadrão.clone() : gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid); finalizarPintura(rampa); });
+              telhado.textura = isRemocao ? null : item; return; 
+          }
           if (targetObject && (isParede || isPilar || isColuna)) {
               const paredeObj = paredesConstruidas.find(p => p.mesh === targetObject); const pilarObj = pilaresConstruidos.find(p => p.mesh === targetObject); const colunaObj = colunasSustentacao.find(p => p.mesh === targetObject);
               if (colunaObj || pilarObj || (paredeObj && paredeObj.isCerca)) { const baseMat = (paredeObj && paredeObj.isCerca) || (pilarObj && pilarObj.isCerca) ? materialCerca : materialParede; for (let i = 0; i < 6; i++) { if (isRemocao) removerMaterialNaFace(targetObject, i, baseMat); else aplicarMaterialNaFace(targetObject, i, item); }
@@ -465,7 +450,7 @@ canvas?.addEventListener('pointerdown', e => {
 
 function aplicarMaterialNaFace(mesh, faceIndex, item) { 
     registrarPintura(mesh); let repeatX = 1, repeatY = 1; 
-    if (mesh.geometry === geoTelhadoBase || mesh.geometry.type === 'CylinderGeometry') { repeatX = Math.max(1, mesh.scale.x / configMapa.tamanhoGrid) * 2; repeatY = Math.max(1, mesh.scale.z / configMapa.tamanhoGrid); } else if (mesh.geometry && mesh.geometry.parameters) { const { width, height, depth } = mesh.geometry.parameters; if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; } } 
+    if (mesh.geometry && mesh.geometry.parameters) { const { width, height, depth } = mesh.geometry.parameters; if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; } } 
     const novosMateriais = getSafeMaterialArray(mesh); const groupsLen = mesh.geometry.groups && mesh.geometry.groups.length > 0 ? mesh.geometry.groups.length : 6; const safeFaceIndex = (faceIndex !== undefined && faceIndex < groupsLen) ? faceIndex : 0;
     novosMateriais[safeFaceIndex] = gerarMaterialPintura(item, repeatX, repeatY); mesh.material = novosMateriais; finalizarPintura(mesh); 
 }
@@ -546,12 +531,9 @@ canvas?.addEventListener('pointermove', e => {
     if (e.ctrlKey) { cursor3D.material = materialMarreta; } else if (modoAtivo === 'coluna' || modoAtivo === 'escada' || modoAtivo === 'escada_baixo' || modoAtivo === 'telhado') { cursor3D.material = materialPreviaEscada; } else { cursor3D.material = materialCursor; }
     
     cursor3D.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1);
-    
-    // Laser da ferramenta na altura correta do teto se for telhado
     if (modoAtivo === 'pintura') { cursor3D.position.set(snapCentroCelula(pt.x), alturaBase + 0.02, snapCentroCelula(pt.z)); } 
     else if (modoAtivo === 'telhado') { cursor3D.position.set(px, alturaBase + obterAltura() + 0.02, pz); } 
     else { cursor3D.position.set(px, alturaBase + 0.02, pz); }
-    
     cursor3D.visible = true;
 
     if (modoAtivo === 'coluna' && !e.ctrlKey) {
@@ -571,12 +553,16 @@ canvas?.addEventListener('pointermove', e => {
 
       if (modoAtivo === 'telhado') {
           const dx = px - pontoA.x, dz = pz - pontoA.z; const comp = Math.max(0.1, Math.hypot(dx, dz));
-          previaTelhado.scale.set(configMapa.tamanhoGrid + 0.5, 2.0, comp + 0.5); 
-          previaTelhado.position.set((pontoA.x + px)/2, alturaBase + hTemp + 1.0, (pontoA.z + pz)/2); previaTelhado.rotation.y = Math.atan2(dx, dz); previaTelhado.visible = true;
+          const espessura = 0.2; const hRoof = 3.0; const pitch = Math.atan2(hRoof, comp); const slopeLen = Math.hypot(comp, hRoof);
+          previaTelhadoMesh.scale.set(configMapa.tamanhoGrid, espessura, slopeLen); 
+          previaTelhadoMesh.rotation.x = Math.atan2(hRoof, comp); 
+          previaTelhadoMesh.position.set(0, hRoof / 2, 0); 
+          previaTelhado.position.set((pontoA.x + px)/2, alturaBase + obterAltura(), (pontoA.z + pz)/2); 
+          previaTelhado.rotation.y = Math.atan2(dx, dz); previaTelhado.visible = true;
           previaMesh.visible = false;
           
-          previaEscadaInicio.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1); previaEscadaInicio.position.set(pontoA.x, alturaBase + hTemp + 0.03, pontoA.z); previaEscadaInicio.visible = true;
-          previaEscadaFim.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1); previaEscadaFim.position.set(px, alturaBase + hTemp + 0.03, pz); previaEscadaFim.visible = true;
+          previaEscadaInicio.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1); previaEscadaInicio.position.set(pontoA.x, alturaBase + obterAltura() + 0.03, pontoA.z); previaEscadaInicio.visible = true;
+          previaEscadaFim.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1); previaEscadaFim.position.set(px, alturaBase + obterAltura() + 0.03, pz); previaEscadaFim.visible = true;
       }
       else if (modoAtivo === 'parede' || modoAtivo === 'cerca' || modoAtivo === 'escada' || modoAtivo === 'escada_baixo') {
         const dx = px - pontoA.x, dz = pz - pontoA.z; const comp = Math.sqrt(dx*dx + dz*dz) || 0.01;

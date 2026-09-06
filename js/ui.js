@@ -19,7 +19,7 @@ export function mostrarGizmo(x, y) {
     const g = document.getElementById('room-gizmo');
     if(g) { 
         g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; 
-        // Agora todos os objetos (salas, escadas e telhados direcionais) podem ser girados livremente!
+        // Agora todos os objetos (salas, escadas e telhados) podem ser girados livremente!
         const rotL = document.getElementById('gizmoRotLeft'); if(rotL) rotL.style.display = 'block';
         const rotR = document.getElementById('gizmoRotRight'); if(rotR) rotR.style.display = 'block';
     }
@@ -32,8 +32,7 @@ export let paleta = []; export let idPaletaSelecionada = null; let proximoIdPale
 export function itemSelecionadoAtual() { return paleta.find(p => p.id === idPaletaSelecionada) || null; }
 
 export function selecionarMaterialNaPaleta(matAlvo) {
-  if (!matAlvo) return;
-  let match = null;
+  if (!matAlvo) return; let match = null;
   if (matAlvo.map) match = paleta.find(p => p.tipo === 'imagem' && p.textura && p.textura.uuid === matAlvo.map.uuid);
   else if (matAlvo.color) match = paleta.find(p => p.tipo === 'cor' && p.cor.toLowerCase() === ('#' + matAlvo.color.getHexString()).toLowerCase());
   if (match) { idPaletaSelecionada = match.id; renderizarPaleta(); showAviso("🎨 Pipeta: Textura copiada!"); } 
@@ -103,7 +102,7 @@ export function iniciarUI() {
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Arraste para desenhar a linha da cumeeira.'));
+  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Arraste para desenhar a rampa de elevação.'));
   
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala, escada ou telhado para ver opções.'));
 
