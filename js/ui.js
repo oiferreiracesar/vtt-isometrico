@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML 
+// js/ui.js - Gerenciamento da Interface HTML (Com Modal de Ajuda e atalho ESC)
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarLarguraEscada, exportarMapa, importarMapa, limparMapa } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -81,6 +81,31 @@ function carregarBancoDeAssets() {
 export function iniciarUI() {
   carregarBancoDeAssets();
 
+  // --- MODAL DE AJUDA E TECLA ESC ---
+  document.getElementById('btnAjuda')?.addEventListener('click', () => {
+      const modal = document.getElementById('modalAjuda');
+      if (modal) modal.style.display = 'flex';
+  });
+
+  document.getElementById('btnFecharAjuda')?.addEventListener('click', () => {
+      const modal = document.getElementById('modalAjuda');
+      if (modal) modal.style.display = 'none';
+  });
+
+  window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+          const modal = document.getElementById('modalAjuda');
+          // Se o modal estiver aberto, fecha o modal
+          if (modal && modal.style.display === 'flex') {
+              modal.style.display = 'none';
+          } else {
+              // Se não estiver aberto, devolve a Mãozinha clicando no botão ocultamente
+              const btnMaozinha = document.getElementById('btnSairModo');
+              if (btnMaozinha) btnMaozinha.click();
+          }
+      }
+  });
+
   document.getElementById('btnAdicionarTextura')?.addEventListener('click', () => document.getElementById('inputAdicionarTextura').click());
   document.getElementById('inputAdicionarTextura')?.addEventListener('change', e => {
     Array.from(e.target.files || []).forEach(arquivo => {
@@ -160,7 +185,6 @@ export function iniciarUI() {
   document.getElementById('btnModoPorta')?.addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
   document.getElementById('btnModoPintura')?.addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo, Ctrl = Remover, Alt = Pipeta)'));
   
-  // ATUALIZADO: Duas ferramentas de escada
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   
