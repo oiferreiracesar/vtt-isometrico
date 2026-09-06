@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML
+// js/ui.js - Gerenciamento da Interface HTML (Com Ocultação Dinâmica no Gizmo)
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, exportarMapa, importarMapa, limparMapa } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -15,9 +15,16 @@ export function showAviso(msg) {
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-export function mostrarGizmo(x, y) {
+// Oculta dinamicamente os botões de rotação se for um telhado!
+export function mostrarGizmo(x, y, tipoObj = 'comodo') {
     const g = document.getElementById('room-gizmo');
-    if(g) { g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; }
+    if(g) { 
+        g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; 
+        const rotL = document.getElementById('gizmoRotLeft');
+        const rotR = document.getElementById('gizmoRotRight');
+        if(rotL) rotL.style.display = tipoObj === 'telhado' ? 'none' : 'block';
+        if(rotR) rotR.style.display = tipoObj === 'telhado' ? 'none' : 'block';
+    }
 }
 
 export function esconderGizmo() {
@@ -161,8 +168,6 @@ export function iniciarUI() {
   document.getElementById('gizmoRotLeft')?.addEventListener('click', () => girarSelecionado('esq'));
   document.getElementById('gizmoRotRight')?.addEventListener('click', () => girarSelecionado('dir'));
   document.getElementById('gizmoDelete')?.addEventListener('click', deletarSelecionado);
-  
-  // O GIZMO AGORA É MULTIUSO PARA ESCADAS E TELHADOS
   document.getElementById('gizmoWiden')?.addEventListener('click', () => alterarDimensaoGizmo(1));
   document.getElementById('gizmoShrink')?.addEventListener('click', () => alterarDimensaoGizmo(-1));
 
