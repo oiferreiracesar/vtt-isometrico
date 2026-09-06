@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML (Com Ajuste de Telhados)
+// js/ui.js - Gerenciamento da Interface HTML
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, exportarMapa, importarMapa, limparMapa } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -162,7 +162,7 @@ export function iniciarUI() {
   document.getElementById('gizmoRotRight')?.addEventListener('click', () => girarSelecionado('dir'));
   document.getElementById('gizmoDelete')?.addEventListener('click', deletarSelecionado);
   
-  // ATUALIZADO: Agora esse botão controla as dimensões de qualquer item selecionado
+  // O GIZMO AGORA É MULTIUSO PARA ESCADAS E TELHADOS
   document.getElementById('gizmoWiden')?.addEventListener('click', () => alterarDimensaoGizmo(1));
   document.getElementById('gizmoShrink')?.addEventListener('click', () => alterarDimensaoGizmo(-1));
 
