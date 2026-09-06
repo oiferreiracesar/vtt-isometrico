@@ -1,5 +1,5 @@
 // js/ui.js - Gerenciamento da Interface HTML
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais } from './construtor.js';
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
 
@@ -15,15 +15,9 @@ export function showAviso(msg) {
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-export function mostrarGizmo(x, y, tipoObj = 'comodo') {
+export function mostrarGizmo(x, y) {
     const g = document.getElementById('room-gizmo');
-    if(g) { 
-        g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; 
-        const rotL = document.getElementById('gizmoRotLeft');
-        const rotR = document.getElementById('gizmoRotRight');
-        if(rotL) rotL.style.display = tipoObj === 'telhado' ? 'none' : 'block';
-        if(rotR) rotR.style.display = tipoObj === 'telhado' ? 'none' : 'block';
-    }
+    if(g) { g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; }
 }
 
 export function esconderGizmo() {
@@ -91,21 +85,15 @@ export function iniciarUI() {
       const modal = document.getElementById('modalAjuda');
       if (modal) modal.style.display = 'flex';
   });
-
   document.getElementById('btnFecharAjuda')?.addEventListener('click', () => {
       const modal = document.getElementById('modalAjuda');
       if (modal) modal.style.display = 'none';
   });
-
   window.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
           const modal = document.getElementById('modalAjuda');
-          if (modal && modal.style.display === 'flex') {
-              modal.style.display = 'none';
-          } else {
-              const btnMaozinha = document.getElementById('btnSairModo');
-              if (btnMaozinha) btnMaozinha.click();
-          }
+          if (modal && modal.style.display === 'flex') { modal.style.display = 'none'; } 
+          else { const btnMaozinha = document.getElementById('btnSairModo'); if (btnMaozinha) btnMaozinha.click(); }
       }
   });
 
@@ -148,16 +136,10 @@ export function iniciarUI() {
   document.getElementById('btnSalvarMapa')?.addEventListener('click', exportarMapa);
   document.getElementById('btnCarregarMapa')?.addEventListener('click', () => document.getElementById('inputCarregarMapa').click());
   document.getElementById('inputCarregarMapa')?.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if(!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-          try { const dados = JSON.parse(ev.target.result); importarMapa(dados); } 
-          catch(err) { showAviso("Erro ao ler o arquivo. O mapa pode estar corrompido."); }
-      };
+      const file = e.target.files[0]; if(!file) return; const reader = new FileReader();
+      reader.onload = ev => { try { const dados = JSON.parse(ev.target.result); importarMapa(dados); } catch(err) { showAviso("Erro ao ler o arquivo. O mapa pode estar corrompido."); } };
       reader.readAsText(file); e.target.value = ''; 
   });
-
   document.getElementById('btnLimparMapa')?.addEventListener('click', () => { if(confirm("Tem certeza que deseja demolir TODO O TABULEIRO? Isso não pode ser desfeito!")) limparMapa(); });
 
   document.getElementById('btnDesfazer')?.addEventListener('click', desfazer);
@@ -169,6 +151,8 @@ export function iniciarUI() {
   document.getElementById('gizmoDelete')?.addEventListener('click', deletarSelecionado);
   document.getElementById('gizmoWiden')?.addEventListener('click', () => alterarDimensaoGizmo(1));
   document.getElementById('gizmoShrink')?.addEventListener('click', () => alterarDimensaoGizmo(-1));
+  document.getElementById('gizmoTaller')?.addEventListener('click', () => alterarAlturaGizmo(1));
+  document.getElementById('gizmoShorter')?.addEventListener('click', () => alterarAlturaGizmo(-1));
 
   document.getElementById('btnModoParede')?.addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
   document.getElementById('btnModoCerca')?.addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
@@ -177,11 +161,10 @@ export function iniciarUI() {
   document.getElementById('btnModoOctogono')?.addEventListener('click', () => ativarFerramenta('btnModoOctogono', 'octogono', 'Sala Octogonal: Clique e arraste.'));
   document.getElementById('btnModoPorta')?.addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
   document.getElementById('btnModoPintura')?.addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo, Ctrl = Remover, Alt = Pipeta)'));
-  
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Arraste para cobrir as suas salas.'));
+  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Arraste para criar uma aba de telhado.'));
   
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala, escada ou telhado para ver opções.'));
 
@@ -202,7 +185,6 @@ export function iniciarUI() {
       configsCamera.nivel += 1; atualizarCamera(); atualizarVisibilidadeAndares(); 
       showAviso(configsCamera.nivel === 0 ? `Subiu para o Térreo.` : (configsCamera.nivel > 0 ? `Subiu para o Nível ${configsCamera.nivel}.` : `Subiu para o Subsolo ${Math.abs(configsCamera.nivel)}.`)); 
   });
-  
   document.getElementById('camDown')?.addEventListener('click', () => { 
       configsCamera.nivel -= 1; atualizarCamera(); atualizarVisibilidadeAndares(); 
       showAviso(configsCamera.nivel === 0 ? `Desceu para o Térreo.` : (configsCamera.nivel > 0 ? `Desceu para o Nível ${configsCamera.nivel}.` : `Desceu para o Subsolo ${Math.abs(configsCamera.nivel)}.`)); 
@@ -214,7 +196,6 @@ export function iniciarUI() {
   btnWallCut?.addEventListener('click', () => { clearWallActive(); btnWallCut.classList.add('ativo'); atualizarVisibilidadeAndares('cut'); });
   btnWallLow?.addEventListener('click', () => { clearWallActive(); btnWallLow.classList.add('ativo'); atualizarVisibilidadeAndares('low'); });
 
-  // NOVO: Toggle de Telhados global
   document.getElementById('camRoofToggle')?.addEventListener('click', (e) => {
       e.currentTarget.classList.toggle('ativo');
       const visivel = e.currentTarget.classList.contains('ativo');
