@@ -1,4 +1,4 @@
-// js/construtor.js - Múltiplos Andares, Gizmo de Telhados e Landing Pads aprimorados!
+// js/construtor.js - Múltiplos Andares, Gizmo, Masmorras, TELHADOS TEXTURIZADOS, Landing Pads e SAVE/LOAD
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
@@ -17,7 +17,7 @@ export const telhadosConstruidos = [];
 let arrastandoConstrucao = false;
 let comodoSelecionado = null; 
 let escadaSelecionada = null; 
-let telhadoSelecionado = null; // NOVO: Foco no Telhado
+let telhadoSelecionado = null; 
 let movendoSelecionado = false;
 let pontoA = null; 
 
@@ -48,6 +48,9 @@ const historicoUndo = [];
 const historicoRedo = [];
 let acaoAtual = null;
 
+// =========================================================================
+// SCANNER E TRADUTOR DE DECORAÇÃO (SAVE/LOAD OTIMIZADO COM CACHE E UV FIX)
+// =========================================================================
 const cacheTexturas = {}; 
 
 function extrairMateriais(mesh) {
@@ -434,7 +437,6 @@ export function girarSelecionado(sentido) {
     }
 }
 
-// NOVO MOTOR DO GIZMO (+ e -) PARA ESCADAS E TELHADOS
 export function alterarDimensaoGizmo(direcao) {
     if (escadaSelecionada) {
         const newLargura = Math.max(configMapa.tamanhoGrid, escadaSelecionada.largura + (direcao * configMapa.tamanhoGrid));
@@ -442,7 +444,6 @@ export function alterarDimensaoGizmo(direcao) {
         iniciarAcao(); reconstruirDegrausEscada(escadaSelecionada, newLargura); finalizarAcao();
         showAviso(`Largura alterada para ${newLargura / configMapa.tamanhoGrid} quadrados.`);
     } else if (telhadoSelecionado) {
-        // Redimensiona a Altura da Pirâmide!
         const novaAltura = Math.max(0.5, telhadoSelecionado.alturaTelhado + (direcao * 0.5));
         if (novaAltura === telhadoSelecionado.alturaTelhado) return;
         
@@ -455,7 +456,6 @@ export function alterarDimensaoGizmo(direcao) {
         const profundidade = Math.max(configMapa.tamanhoGrid, Math.abs(maxZ - minZ)) + 0.5;
         
         telhadoSelecionado.mesh.scale.set(largura, novaAltura, profundidade);
-        
         const alturaBase = (telhadoSelecionado.nivel * obterAltura()) + obterAltura();
         telhadoSelecionado.mesh.position.y = alturaBase + (novaAltura / 2);
         
@@ -758,7 +758,6 @@ canvas?.addEventListener('pointermove', e => {
   if (hit) {
     const px = snapGrid(hit.point.x), pz = snapGrid(hit.point.z);
     
-    // LANDING PADS NO TELHADO TAMBÉM!
     if (e.ctrlKey) {
         cursor3D.material = materialMarreta;
     } else if (modoAtivo === 'coluna' || modoAtivo === 'escada' || modoAtivo === 'escada_baixo' || modoAtivo === 'telhado') {
@@ -807,7 +806,6 @@ canvas?.addEventListener('pointermove', e => {
           previaMesh.rotation.y = 0; previaMesh.visible = true;
           if (previaMesh.material.color) previaMesh.material.color.setHex(0x38bdf8);
           
-          // LANDING PADS MÁGICOS DO TELHADO! (Para focar as bordas)
           previaEscadaInicio.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1);
           previaEscadaInicio.position.set(pontoA.x, alturaBase + 0.03, pontoA.z);
           previaEscadaInicio.visible = true;
