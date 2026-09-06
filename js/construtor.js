@@ -1,4 +1,4 @@
-// js/construtor.js - Múltiplos Andares, Gizmo, Masmorras, TELHADOS TEXTURIZADOS, Landing Pads e SAVE/LOAD
+// js/construtor.js - Múltiplos Andares, Gizmo, Masmorras, TELHADOS, Landing Pads e SAVE BLINDADO
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
@@ -49,7 +49,7 @@ const historicoRedo = [];
 let acaoAtual = null;
 
 // =========================================================================
-// SCANNER E TRADUTOR DE DECORAÇÃO (SAVE/LOAD OTIMIZADO COM CACHE E UV FIX)
+// TRADUTOR DE DECORAÇÃO BLINDADO (RESOLVE O CRASH DA LINHA 0)
 // =========================================================================
 const cacheTexturas = {}; 
 
@@ -57,16 +57,18 @@ function extrairMateriais(mesh) {
     if (!mesh || !mesh.material) return [];
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     return mats.map(m => {
+        if (!m) return { tipo: 'cor', cor: '#8a7550' }; // Failsafe contra crash
         if (m.map && m.map.image) return { tipo: 'imagem', dataUrl: m.map.image.src || m.map.image.currentSrc };
-        return { tipo: 'cor', cor: '#' + m.color.getHexString() };
+        if (m.color) return { tipo: 'cor', cor: '#' + m.color.getHexString() };
+        return { tipo: 'cor', cor: '#ffffff' };
     });
 }
 
 function extrairMaterialEscada(escada) {
     if (escada.mesh.children.length > 0) {
         const m = escada.mesh.children[0].material;
-        if (m.map && m.map.image) return { tipo: 'imagem', dataUrl: m.map.image.src || m.map.image.currentSrc };
-        return { tipo: 'cor', cor: '#' + m.color.getHexString() };
+        if (m && m.map && m.map.image) return { tipo: 'imagem', dataUrl: m.map.image.src || m.map.image.currentSrc };
+        if (m && m.color) return { tipo: 'cor', cor: '#' + m.color.getHexString() };
     }
     return { tipo: 'cor', cor: '#8a7550' };
 }
@@ -75,6 +77,7 @@ function aplicarMateriaisImportados(mesh, matDataArray, objectType) {
     if (!matDataArray || matDataArray.length === 0 || !mesh) return;
     
     const materiais = matDataArray.map(data => {
+        if (!data) return new THREE.MeshLambertMaterial({ color: '#ffffff' });
         if (data.tipo === 'imagem' && data.dataUrl) {
             let tex = cacheTexturas[data.dataUrl];
             if (!tex) {
@@ -91,11 +94,32 @@ function aplicarMateriaisImportados(mesh, matDataArray, objectType) {
         }
     });
 
-    mesh.material = Array.isArray(mesh.material) ? materiais : materiais[0];
+    // MÁGICA DE BLINDAGEM: Garante que o objeto tenha o número exato de faces (Evita o crash do Raycast)
+    const groupsLen = mesh.geometry.groups.length > 0 ? mesh.geometry.groups.length : (Array.isArray(mesh.material) ? mesh.material.length : 1);
+
+    if (Array.isArray(mesh.material)) {
+        if (materiais.length === groupsLen) {
+            mesh.material = materiais;
+        } else if (materiais.length === 1) {
+            const padded = [];
+            for(let i=0; i<groupsLen; i++) padded.push(materiais[0].clone());
+            mesh.material = padded;
+        } else {
+            const padded = [];
+            for(let i=0; i<groupsLen; i++) padded.push(materiais[i] ? materiais[i] : materiais[0].clone());
+            mesh.material = padded;
+        }
+    } else {
+        if (materiais.length === 1) {
+            mesh.material = materiais[0];
+        } else {
+            mesh.material = materiais;
+        }
+    }
 
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     mats.forEach((mat, faceIndex) => {
-        if (mat.map && mesh.geometry) {
+        if (mat && mat.map && mesh.geometry) {
             let repeatX = 1, repeatY = 1;
             if (objectType === 'piso' || objectType === 'escada') {
                 repeatX = configMapa.tamanhoGrid; repeatY = configMapa.tamanhoGrid;
@@ -212,6 +236,7 @@ export function importarMapa(dados) {
     configsCamera.nivel = nivelOriginal; historicoUndo.length = 0; acaoAtual = null;
     atualizarVisibilidadeAndares(); showAviso("Decorações carregadas com sucesso!");
 }
+// =========================================================================
 
 function iniciarAcao() { acaoAtual = { add: [], rem: [], paint: [], move: [] }; }
 function finalizarAcao() {
@@ -381,7 +406,7 @@ export function setModoAtivo(modo) {
 function limparSelecao() {
     if (comodoSelecionado) comodoSelecionado.paredes.forEach(p => p.mesh.material.forEach(m => m.emissive.setHex(0x000000)));
     if (escadaSelecionada) escadaSelecionada.mesh.children.forEach(c => c.material.emissive.setHex(0x000000));
-    if (telhadoSelecionado) telhadoSelecionado.mesh.material.forEach(m => { if(m.emissive) m.emissive.setHex(0x000000); });
+    if (telhadoSelecionado) telhadoSelecionado.mesh.material.forEach(m => { if(m && m.emissive) m.emissive.setHex(0x000000); });
     
     comodoSelecionado = null; escadaSelecionada = null; telhadoSelecionado = null;
     movendoSelecionado = false; arrastandoSeta = null;
@@ -563,7 +588,7 @@ canvas?.addEventListener('pointerdown', e => {
           const isTelhado = telhadosConstruidos.find(t => t.mesh === hitAll.object);
           if (isTelhado) {
               limparSelecao(); telhadoSelecionado = isTelhado;
-              telhadoSelecionado.mesh.material.forEach(m => { if(m.emissive) m.emissive.setHex(0x2a2a2a); });
+              telhadoSelecionado.mesh.material.forEach(m => { if(m && m.emissive) m.emissive.setHex(0x2a2a2a); });
               mostrarGizmo(e.clientX, e.clientY); return;
           }
           const objClicado = paredesConstruidas.find(p => p.mesh === hitAll.object) || pilaresConstruidos.find(p => p.mesh === hitAll.object);
@@ -1012,10 +1037,77 @@ function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) {
     } 
     return mat; 
 }
-function aplicarMaterialNaFace(mesh, faceIndex, item) { registrarPintura(mesh); let repeatX = 1, repeatY = 1; if (mesh.geometry.type === 'ConeGeometry') { repeatX = Math.max(1, mesh.scale.x / configMapa.tamanhoGrid) * 2; repeatY = Math.max(1, mesh.scale.y / configMapa.tamanhoGrid); } else if (mesh.geometry && mesh.geometry.parameters) { const { width, height, depth } = mesh.geometry.parameters; if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; } } const novosMateriais = Array.isArray(mesh.material) ? [...mesh.material] : [mesh.material]; novosMateriais[faceIndex] = gerarMaterialPintura(item, repeatX, repeatY); mesh.material = novosMateriais; finalizarPintura(mesh); }
-function pintarFacePorNormalMundial(mesh, targetNormal, item) { const tNorm = targetNormal.clone().normalize(); const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)]; for (let i = 0; i < 6; i++) { const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); if (worldNormal.dot(tNorm) > 0.5) aplicarMaterialNaFace(mesh, i, item); } }
-function removerMaterialNaFace(mesh, faceIndex, matBase) { registrarPintura(mesh); const novosMateriais = Array.isArray(mesh.material) ? [...mesh.material] : [mesh.material]; novosMateriais[faceIndex] = matBase.clone(); mesh.material = novosMateriais; finalizarPintura(mesh); }
-function removerPinturaFacePorNormal(mesh, targetNormal, matBase) { const tNorm = targetNormal.clone().normalize(); const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)]; for (let i = 0; i < 6; i++) { const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); if (worldNormal.dot(tNorm) > 0.5) removerMaterialNaFace(mesh, i, matBase); } }
+
+function aplicarMaterialNaFace(mesh, faceIndex, item) { 
+    registrarPintura(mesh); 
+    let repeatX = 1, repeatY = 1; 
+    const groupsLen = mesh.geometry.groups.length > 0 ? mesh.geometry.groups.length : 6;
+
+    if (mesh.geometry.type === 'ConeGeometry') { 
+        repeatX = Math.max(1, mesh.scale.x / configMapa.tamanhoGrid) * 2; 
+        repeatY = Math.max(1, mesh.scale.y / configMapa.tamanhoGrid); 
+    } else if (mesh.geometry && mesh.geometry.parameters) { 
+        const { width, height, depth } = mesh.geometry.parameters; 
+        if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } 
+        else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } 
+        else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; } 
+    } 
+    
+    let novosMateriais = [];
+    if (Array.isArray(mesh.material)) {
+        novosMateriais = [...mesh.material];
+    } else {
+        for (let i = 0; i < groupsLen; i++) novosMateriais.push(mesh.material.clone());
+    }
+
+    // Preenche buracos vazios para evitar o crash de Linha 0 (undefined.side)
+    for (let i = 0; i < groupsLen; i++) {
+        if (!novosMateriais[i]) novosMateriais[i] = novosMateriais[0] ? novosMateriais[0].clone() : materialParede.clone();
+    }
+
+    novosMateriais[faceIndex] = gerarMaterialPintura(item, repeatX, repeatY); 
+    mesh.material = novosMateriais; 
+    finalizarPintura(mesh); 
+}
+
+function pintarFacePorNormalMundial(mesh, targetNormal, item) { 
+    const tNorm = targetNormal.clone().normalize(); 
+    const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)]; 
+    for (let i = 0; i < 6; i++) { 
+        const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); 
+        if (worldNormal.dot(tNorm) > 0.5) aplicarMaterialNaFace(mesh, i, item); 
+    } 
+}
+
+function removerMaterialNaFace(mesh, faceIndex, matBase) { 
+    registrarPintura(mesh); 
+    const groupsLen = mesh.geometry.groups.length > 0 ? mesh.geometry.groups.length : 6;
+    let novosMateriais = [];
+
+    if (Array.isArray(mesh.material)) {
+        novosMateriais = [...mesh.material];
+    } else {
+        for (let i = 0; i < groupsLen; i++) novosMateriais.push(mesh.material.clone());
+    }
+
+    for (let i = 0; i < groupsLen; i++) {
+        if (!novosMateriais[i]) novosMateriais[i] = novosMateriais[0] ? novosMateriais[0].clone() : materialParede.clone();
+    }
+
+    novosMateriais[faceIndex] = matBase.clone(); 
+    mesh.material = novosMateriais; 
+    finalizarPintura(mesh); 
+}
+
+function removerPinturaFacePorNormal(mesh, targetNormal, matBase) { 
+    const tNorm = targetNormal.clone().normalize(); 
+    const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)]; 
+    for (let i = 0; i < 6; i++) { 
+        const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); 
+        if (worldNormal.dot(tNorm) > 0.5) removerMaterialNaFace(mesh, i, matBase); 
+    } 
+}
+
 function aplicarPiso(x, z, item) { let tile = pisosConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01 && p.nivel === configsCamera.nivel); if (!tile) { const mesh = new THREE.Mesh(new THREE.BoxGeometry(configMapa.tamanhoGrid, 0.12, configMapa.tamanhoGrid), materialPiso.clone()); const alturaBase = configsCamera.nivel * obterAltura(); mesh.position.set(x, alturaBase + 0.06, z); scene.add(mesh); tile = { mesh, x, z, nivel: configsCamera.nivel }; pisosConstruidos.push(tile); registrarAdicao('piso', tile, pisosConstruidos); } registrarPintura(tile.mesh); tile.mesh.material = gerarMaterialPintura(item, configMapa.tamanhoGrid, configMapa.tamanhoGrid); finalizarPintura(tile.mesh); }
 function removerPiso(x, z) { const tile = pisosConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01 && p.nivel === configsCamera.nivel); if (tile) { removerObjetoMundo('piso', tile, pisosConstruidos); } }
 function distanciaPontoSegmento(px, pz, ax, az, bx, bz) { const compSq = (bx-ax)**2 + (bz-az)**2; if (compSq === 0) return Math.hypot(px-ax, pz-az); let t = Math.max(0, Math.min(1, ((px-ax)*(bx-ax) + (pz-az)*(bz-az)) / compSq)); return Math.hypot(px - (ax + t*(bx-ax)), pz - (az + t*(bz-az))); }
@@ -1028,8 +1120,8 @@ function setOpacity(mesh, isTransparent, opacity) {
         mesh.children.forEach(child => setOpacity(child, isTransparent, opacity)); 
     } else if (Array.isArray(mesh.material)) { 
         mesh.material.forEach(m => { 
-            if (m.transparent !== isTransparent) m.needsUpdate = true;
-            m.transparent = isTransparent; m.opacity = opacity; 
+            if (m && m.transparent !== isTransparent) m.needsUpdate = true;
+            if (m) { m.transparent = isTransparent; m.opacity = opacity; }
         }); 
     } else if (mesh.material) { 
         if (mesh.material.transparent !== isTransparent) mesh.material.needsUpdate = true;
