@@ -296,10 +296,22 @@ const materialPrevia = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparen
 const materialCursor = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false });
 const materialMarreta = new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.6, depthWrite: false });
 
+// OS NOVOS MATERIAIS DOS LANDING PADS (Quadrados verdes de Escada)
+const materialPreviaEscada = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.6, depthWrite: false });
+
 const cursor3D = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), materialCursor);
 cursor3D.rotation.x = -Math.PI / 2; cursor3D.visible = false; scene.add(cursor3D);
+
 const previaMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materialPrevia);
 previaMesh.visible = false; scene.add(previaMesh);
+
+// A MALHA DO PISO INICIAL DA ESCADA
+const previaEscadaInicio = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), materialPreviaEscada);
+previaEscadaInicio.rotation.x = -Math.PI / 2; previaEscadaInicio.visible = false; scene.add(previaEscadaInicio);
+
+// A MALHA DO PISO FINAL DA ESCADA
+const previaEscadaFim = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), materialPreviaEscada);
+previaEscadaFim.rotation.x = -Math.PI / 2; previaEscadaFim.visible = false; scene.add(previaEscadaFim);
 
 const raycaster = new THREE.Raycaster(); const mouseNdc = new THREE.Vector2();
 
@@ -341,6 +353,8 @@ export function setModoAtivo(modo) {
   pontoA = null;
   limparSelecao();
   previaMesh.visible = false;
+  previaEscadaInicio.visible = false;
+  previaEscadaFim.visible = false;
   cursor3D.visible = false;
   const divMedida = document.getElementById('cursor-medida');
   if(divMedida) divMedida.style.display = 'none';
@@ -670,14 +684,35 @@ canvas?.addEventListener('pointermove', e => {
       if (modoAtivo === 'parede' || modoAtivo === 'cerca' || modoAtivo === 'escada' || modoAtivo === 'escada_baixo') {
         const dx = px - pontoA.x, dz = pz - pontoA.z; const comp = Math.sqrt(dx*dx + dz*dz) || 0.01;
         previaMesh.scale.set(0.25, hTemp, comp + 0.25); previaMesh.position.set((pontoA.x + px)/2, alturaBase + hTemp/2, (pontoA.z + pz)/2); previaMesh.rotation.y = Math.atan2(dx, dz); previaMesh.visible = true;
-        // Diferencia a cor para indicar que a escada está afundando
         if (previaMesh.material.color) previaMesh.material.color.setHex(modoAtivo === 'escada_baixo' ? 0xff4444 : 0x38bdf8);
+
+        // NOVA MECÂNICA DOS QUADRADOS VERDES (LANDING PADS)
+        if (modoAtivo === 'escada' || modoAtivo === 'escada_baixo') {
+            const sinalAndar = modoAtivo === 'escada_baixo' ? -1 : 1;
+            
+            previaEscadaInicio.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1);
+            previaEscadaInicio.position.set(pontoA.x, alturaBase + 0.03, pontoA.z);
+            previaEscadaInicio.visible = true;
+
+            previaEscadaFim.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1);
+            previaEscadaFim.position.set(px, alturaBase + (sinalAndar * obterAltura()) + 0.03, pz);
+            previaEscadaFim.visible = true;
+        }
+
       } else if (modoAtivo !== 'coluna') {
+        previaEscadaInicio.visible = false; previaEscadaFim.visible = false;
         const w = Math.abs(px - pontoA.x) || 0.1, d = Math.abs(pz - pontoA.z) || 0.1;
         previaMesh.scale.set(w, hTemp, d); previaMesh.position.set((pontoA.x + px)/2, alturaBase + hTemp/2, (pontoA.z + pz)/2); previaMesh.rotation.y = 0; previaMesh.visible = true;
       }
-    } else { if(divMedida) divMedida.style.display = 'none'; }
-  } else { cursor3D.visible = false; if(divMedida) divMedida.style.display = 'none'; }
+    } else { 
+        if(divMedida) divMedida.style.display = 'none'; 
+        previaEscadaInicio.visible = false; previaEscadaFim.visible = false;
+    }
+  } else { 
+      cursor3D.visible = false; 
+      previaEscadaInicio.visible = false; previaEscadaFim.visible = false;
+      if(divMedida) divMedida.style.display = 'none'; 
+  }
 });
 
 window.addEventListener('pointerup', e => {
@@ -703,7 +738,6 @@ window.addEventListener('pointerup', e => {
             showAviso(`Escada criada! Subiu para o Nível ${configsCamera.nivel}.`);
         }
         else if (modoAtivo === 'escada_baixo') {
-            // Inverte as pontas para a escada descer e pertencer ao nível inferior!
             criarEscada(px, pz, pontoA.x, pontoA.z, obterAltura(), configMapa.tamanhoGrid, configsCamera.nivel - 1);
             configsCamera.nivel -= 1;
             atualizarCamera(); atualizarVisibilidadeAndares();
@@ -715,6 +749,7 @@ window.addEventListener('pointerup', e => {
       }
     }
     arrastandoConstrucao = false; pontoA = null; previaMesh.visible = false;
+    previaEscadaInicio.visible = false; previaEscadaFim.visible = false;
   }
   finalizarAcao(); 
 });
@@ -845,9 +880,6 @@ function distanciaPontoSegmento(px, pz, ax, az, bx, bz) { const compSq = (bx-ax)
 function paredeQueBloqueia(x1, z1, x2, z2) { const midX = (x1+x2)/2, midZ = (z1+z2)/2; return paredesConstruidas.find(p => p.nivel === configsCamera.nivel && !p.isCerca && distanciaPontoSegmento(midX, midZ, p.ax, p.az, p.bx, p.bz) < 0.2) || null; }
 function encontrarAreaFechada(xInicial, zInicial) { const visitados = new Set(), pilha = [{ x: xInicial, z: zInicial }], celulas = []; const limiteX = configMapa.largura / 2, limiteZ = configMapa.profundidade / 2; while (pilha.length && celulas.length < 50000) { const atual = pilha.pop(), chave = `${atual.x.toFixed(2)},${atual.z.toFixed(2)}`; if (visitados.has(chave)) continue; visitados.add(chave); if (atual.x < -limiteX + 0.1 || atual.x > limiteX - 0.1 || atual.z < -limiteZ + 0.1 || atual.z > limiteZ - 0.1) continue; celulas.push(atual); [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dx, dz]) => { const vx = atual.x + dx * configMapa.tamanhoGrid, vz = atual.z + dz * configMapa.tamanhoGrid; if (!paredeQueBloqueia(atual.x, atual.z, vx, vz)) pilha.push({ x: vx, z: vz }); }); } return { celulas }; }
 
-// ----------------------------------------------------
-// GERENCIADOR DE VISIBILIDADE (TETO 100% OCULTO)
-// ----------------------------------------------------
 function setOpacity(mesh, isTransparent, opacity) { 
     if (!mesh) return; 
     if (mesh.type === 'Group') { 
@@ -896,7 +928,7 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
   [pisosConstruidos, escadasConstruidas].forEach(arr => { 
       arr.forEach(obj => { 
           if (obj.nivel > configsCamera.nivel) { 
-              obj.mesh.visible = false; // TETO COMPLETAMENTE REMOVIDO!
+              obj.mesh.visible = false; 
           } else { 
               obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); 
           } 
