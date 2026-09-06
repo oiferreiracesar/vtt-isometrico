@@ -1,4 +1,4 @@
-// js/construtor.js - Múltiplos Andares, Gizmo, Masmorras Profundas e SAVE/LOAD
+// js/construtor.js - Múltiplos Andares, Gizmo, Masmorras Profundas e SAVE/LOAD OTIMIZADO
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta } from './ui.js';
@@ -47,8 +47,10 @@ const historicoRedo = [];
 let acaoAtual = null;
 
 // =========================================================================
-// SCANNER E TRADUTOR DE DECORAÇÃO (SAVE/LOAD AVANÇADO)
+// SCANNER E TRADUTOR DE DECORAÇÃO (SAVE/LOAD OTIMIZADO COM CACHE)
 // =========================================================================
+const cacheTexturas = {}; 
+
 function extrairMateriais(mesh) {
     if (!mesh || !mesh.material) return [];
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
@@ -72,10 +74,16 @@ function aplicarMateriaisImportados(mesh, matDataArray, objectType) {
     
     const materiais = matDataArray.map(data => {
         if (data.tipo === 'imagem' && data.dataUrl) {
-            const tex = new THREE.TextureLoader().load(data.dataUrl);
-            tex.colorSpace = THREE.SRGBColorSpace;
-            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-            return new THREE.MeshLambertMaterial({ map: tex, color: 0xffffff });
+            let tex = cacheTexturas[data.dataUrl];
+            if (!tex) {
+                tex = new THREE.TextureLoader().load(data.dataUrl);
+                tex.colorSpace = THREE.SRGBColorSpace;
+                cacheTexturas[data.dataUrl] = tex;
+            }
+            const cloneTex = tex.clone(); 
+            cloneTex.needsUpdate = true;
+            cloneTex.wrapS = cloneTex.wrapT = THREE.RepeatWrapping;
+            return new THREE.MeshLambertMaterial({ map: cloneTex, color: 0xffffff });
         } else {
             return new THREE.MeshLambertMaterial({ color: data.cor || '#ffffff' });
         }
@@ -131,31 +139,39 @@ export function importarMapa(dados) {
     limparMapa();
     const nivelOriginal = configsCamera.nivel;
 
+    const comodosIds = new Set();
+    if (dados.paredes) dados.paredes.forEach(p => { if(p.comodoId) comodosIds.add(p.comodoId); });
+    if (dados.pilares) dados.pilares.forEach(p => { if(p.comodoId) comodosIds.add(p.comodoId); });
+    comodosIds.forEach(id => comodosConstruidos.push({ id, paredes: [], pilares: [] }));
+
     if(dados.pisos) {
         dados.pisos.forEach(p => {
             configsCamera.nivel = p.nivel;
             aplicarPiso(p.x, p.z, { tipo: 'cor', cor: '#8a7550' }); 
-            const piso = pisosConstruidos[pisosConstruidos.length - 1];
-            aplicarMateriaisImportados(piso.mesh, p.materiais, 'piso');
+            const piso = pisosConstruidos.find(tile => Math.abs(tile.x - p.x) < 0.01 && Math.abs(tile.z - p.z) < 0.01 && tile.nivel === p.nivel);
+            if(piso) aplicarMateriaisImportados(piso.mesh, p.materiais, 'piso');
         });
     }
     if(dados.pilares) {
         dados.pilares.forEach(p => {
             configsCamera.nivel = p.nivel;
             const pilar = obterOuCriarPilar(p.x, p.z, p.altura, p.isCerca, p.comodoId);
-            aplicarMateriaisImportados(pilar.mesh, p.materiais, 'pilar');
+            if(pilar) aplicarMateriaisImportados(pilar.mesh, p.materiais, 'pilar');
         });
     }
     if(dados.paredes) {
         dados.paredes.forEach(p => {
             configsCamera.nivel = p.nivel;
             criarSegmentoParede(p.ax, p.az, p.bx, p.bz, p.altura, p.isCerca, p.comodoId);
-            const parede = paredesConstruidas[paredesConstruidas.length - 1];
-            aplicarMateriaisImportados(parede.mesh, p.materiais, 'parede');
-            if (p.isPorta) {
-                parede.isPorta = true;
-                const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 });
-                parede.mesh.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta];
+            const parede = paredesConstruidas.find(w => Math.abs(w.ax - p.ax) < 0.01 && Math.abs(w.az - p.az) < 0.01 && Math.abs(w.bx - p.bx) < 0.01 && Math.abs(w.bz - p.bz) < 0.01 && w.nivel === p.nivel);
+            
+            if (parede) {
+                aplicarMateriaisImportados(parede.mesh, p.materiais, 'parede');
+                if (p.isPorta) {
+                    parede.isPorta = true;
+                    const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 });
+                    parede.mesh.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta];
+                }
             }
         });
     }
@@ -163,16 +179,16 @@ export function importarMapa(dados) {
         dados.colunas.forEach(c => {
             configsCamera.nivel = c.nivel;
             criarColunaSustentacao(c.x, c.z, c.altura);
-            const col = colunasSustentacao[colunasSustentacao.length - 1];
-            aplicarMateriaisImportados(col.mesh, c.materiais, 'coluna');
+            const col = colunasSustentacao.find(col => Math.abs(col.x - c.x) < 0.01 && Math.abs(col.z - c.z) < 0.01 && col.nivel === c.nivel);
+            if(col) aplicarMateriaisImportados(col.mesh, c.materiais, 'coluna');
         });
     }
     if(dados.escadas) {
         dados.escadas.forEach(e => {
             configsCamera.nivel = e.nivel;
             criarEscada(e.ax, e.az, e.bx, e.bz, e.alturaAndar, e.largura, e.nivel);
-            const escada = escadasConstruidas[escadasConstruidas.length - 1];
-            if (e.material) {
+            const escada = escadasConstruidas.find(s => Math.abs(s.ax - e.ax) < 0.01 && Math.abs(s.az - e.az) < 0.01 && Math.abs(s.bx - e.bx) < 0.01 && Math.abs(s.bz - e.bz) < 0.01 && s.nivel === e.nivel);
+            if (escada && e.material) {
                 escada.textura = { tipo: e.material.tipo, cor: e.material.cor, dataUrl: e.material.dataUrl };
                 escada.mesh.children.forEach(child => aplicarMateriaisImportados(child, [e.material], 'escada'));
             }
@@ -182,7 +198,6 @@ export function importarMapa(dados) {
     configsCamera.nivel = nivelOriginal; historicoUndo.length = 0; acaoAtual = null;
     atualizarVisibilidadeAndares(); showAviso("Decorações carregadas com sucesso!");
 }
-// =========================================================================
 
 function iniciarAcao() { acaoAtual = { add: [], rem: [], paint: [], move: [] }; }
 function finalizarAcao() {
@@ -295,8 +310,6 @@ const materialPiso = new THREE.MeshLambertMaterial({ color: 0x8a7550 });
 const materialPrevia = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 });
 const materialCursor = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false });
 const materialMarreta = new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.6, depthWrite: false });
-
-// OS NOVOS MATERIAIS DOS LANDING PADS (Quadrados verdes de Escada)
 const materialPreviaEscada = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.6, depthWrite: false });
 
 const cursor3D = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), materialCursor);
@@ -305,11 +318,9 @@ cursor3D.rotation.x = -Math.PI / 2; cursor3D.visible = false; scene.add(cursor3D
 const previaMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materialPrevia);
 previaMesh.visible = false; scene.add(previaMesh);
 
-// A MALHA DO PISO INICIAL DA ESCADA
 const previaEscadaInicio = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), materialPreviaEscada);
 previaEscadaInicio.rotation.x = -Math.PI / 2; previaEscadaInicio.visible = false; scene.add(previaEscadaInicio);
 
-// A MALHA DO PISO FINAL DA ESCADA
 const previaEscadaFim = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), materialPreviaEscada);
 previaEscadaFim.rotation.x = -Math.PI / 2; previaEscadaFim.visible = false; scene.add(previaEscadaFim);
 
@@ -663,14 +674,40 @@ canvas?.addEventListener('pointermove', e => {
 
   if (hit) {
     const px = snapGrid(hit.point.x), pz = snapGrid(hit.point.z);
-    cursor3D.material = e.ctrlKey ? materialMarreta : materialCursor;
+    
+    // NOVA LÓGICA: Cursor fica verde (Landing Pad) se for Coluna
+    if (e.ctrlKey) {
+        cursor3D.material = materialMarreta;
+    } else if (modoAtivo === 'coluna' || modoAtivo === 'escada' || modoAtivo === 'escada_baixo') {
+        cursor3D.material = materialPreviaEscada;
+    } else {
+        cursor3D.material = materialCursor;
+    }
+    
     cursor3D.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1);
     
     if (modoAtivo === 'pintura') { cursor3D.position.set(snapCentroCelula(hit.point.x), alturaBase + 0.02, snapCentroCelula(hit.point.z)); } 
     else { cursor3D.position.set(px, alturaBase + 0.02, pz); }
     cursor3D.visible = true;
 
-    if (arrastandoConstrucao && pontoA) {
+    // PREVIEW DE COLUNA
+    if (modoAtivo === 'coluna' && !e.ctrlKey) {
+        const hTemp = obterAltura();
+        previaMesh.scale.set(0.4, hTemp, 0.4);
+        previaMesh.position.set(px, alturaBase + hTemp/2, pz);
+        previaMesh.rotation.y = 0;
+        previaMesh.visible = true;
+        if (previaMesh.material.color) previaMesh.material.color.setHex(0x4ade80);
+
+        if(divMedida) {
+            divMedida.style.display = 'block'; 
+            divMedida.style.left = (e.clientX + 15) + 'px'; 
+            divMedida.style.top = (e.clientY + 15) + 'px';
+            divMedida.textContent = `Pilar de Sustentação`;
+        }
+        previaEscadaInicio.visible = false; previaEscadaFim.visible = false;
+    }
+    else if (arrastandoConstrucao && pontoA) {
       if(divMedida) {
           divMedida.style.display = 'block'; divMedida.style.left = (e.clientX + 15) + 'px'; divMedida.style.top = (e.clientY + 15) + 'px';
           const dxM = Math.abs(px - pontoA.x) / configMapa.tamanhoGrid, dzM = Math.abs(pz - pontoA.z) / configMapa.tamanhoGrid;
@@ -686,30 +723,32 @@ canvas?.addEventListener('pointermove', e => {
         previaMesh.scale.set(0.25, hTemp, comp + 0.25); previaMesh.position.set((pontoA.x + px)/2, alturaBase + hTemp/2, (pontoA.z + pz)/2); previaMesh.rotation.y = Math.atan2(dx, dz); previaMesh.visible = true;
         if (previaMesh.material.color) previaMesh.material.color.setHex(modoAtivo === 'escada_baixo' ? 0xff4444 : 0x38bdf8);
 
-        // NOVA MECÂNICA DOS QUADRADOS VERDES (LANDING PADS)
         if (modoAtivo === 'escada' || modoAtivo === 'escada_baixo') {
             const sinalAndar = modoAtivo === 'escada_baixo' ? -1 : 1;
-            
             previaEscadaInicio.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1);
             previaEscadaInicio.position.set(pontoA.x, alturaBase + 0.03, pontoA.z);
             previaEscadaInicio.visible = true;
-
             previaEscadaFim.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1);
             previaEscadaFim.position.set(px, alturaBase + (sinalAndar * obterAltura()) + 0.03, pz);
             previaEscadaFim.visible = true;
+        } else {
+            previaEscadaInicio.visible = false; previaEscadaFim.visible = false;
         }
 
-      } else if (modoAtivo !== 'coluna') {
+      } else {
         previaEscadaInicio.visible = false; previaEscadaFim.visible = false;
         const w = Math.abs(px - pontoA.x) || 0.1, d = Math.abs(pz - pontoA.z) || 0.1;
         previaMesh.scale.set(w, hTemp, d); previaMesh.position.set((pontoA.x + px)/2, alturaBase + hTemp/2, (pontoA.z + pz)/2); previaMesh.rotation.y = 0; previaMesh.visible = true;
+        if (previaMesh.material.color) previaMesh.material.color.setHex(0x38bdf8);
       }
     } else { 
-        if(divMedida) divMedida.style.display = 'none'; 
+        previaMesh.visible = false;
         previaEscadaInicio.visible = false; previaEscadaFim.visible = false;
+        if(divMedida) divMedida.style.display = 'none'; 
     }
   } else { 
       cursor3D.visible = false; 
+      previaMesh.visible = false;
       previaEscadaInicio.visible = false; previaEscadaFim.visible = false;
       if(divMedida) divMedida.style.display = 'none'; 
   }
