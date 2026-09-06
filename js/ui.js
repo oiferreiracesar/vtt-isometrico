@@ -1,5 +1,5 @@
-// js/ui.js - Gerenciamento da Interface HTML
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarLarguraEscada, exportarMapa, importarMapa, limparMapa } from './construtor.js';
+// js/ui.js - Gerenciamento da Interface HTML (Com Ajuste de Telhados)
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, exportarMapa, importarMapa, limparMapa } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
 
@@ -161,8 +161,10 @@ export function iniciarUI() {
   document.getElementById('gizmoRotLeft')?.addEventListener('click', () => girarSelecionado('esq'));
   document.getElementById('gizmoRotRight')?.addEventListener('click', () => girarSelecionado('dir'));
   document.getElementById('gizmoDelete')?.addEventListener('click', deletarSelecionado);
-  document.getElementById('gizmoWiden')?.addEventListener('click', () => alterarLarguraEscada(1));
-  document.getElementById('gizmoShrink')?.addEventListener('click', () => alterarLarguraEscada(-1));
+  
+  // ATUALIZADO: Agora esse botão controla as dimensões de qualquer item selecionado
+  document.getElementById('gizmoWiden')?.addEventListener('click', () => alterarDimensaoGizmo(1));
+  document.getElementById('gizmoShrink')?.addEventListener('click', () => alterarDimensaoGizmo(-1));
 
   document.getElementById('btnModoParede')?.addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
   document.getElementById('btnModoCerca')?.addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
@@ -176,10 +178,9 @@ export function iniciarUI() {
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
   
-  // ATIVAMOS O BOTÃO DE TELHADO!
   document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Arraste para cobrir as suas salas.'));
   
-  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala ou escada para ver opções.'));
+  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala, escada ou telhado para ver opções.'));
 
   const botoesFuturos = ['btnModoTerreno'];
   botoesFuturos.forEach(id => { document.getElementById(id)?.addEventListener('click', () => showAviso("Em breve!")); });
