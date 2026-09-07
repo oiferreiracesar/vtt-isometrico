@@ -1,14 +1,17 @@
-// js/ui.js
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais } from './construtor.js';
+// js/ui.js - Cérebro da Máquina de Estados (State Machine)
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
+
+// MÁQUINA DE ESTADOS
+export let estadoGlobal = 'construcao'; // Valores possíveis: 'construcao', 'tabuleiro', 'imersao', 'grimorio'
 
 let avisoTimeout = null;
 export function showAviso(msg) {
   let el = document.getElementById('avisoTemp');
   if(!el) {
     el = document.createElement('div'); el.id = 'avisoTemp';
-    el.style.cssText = 'position:absolute; bottom:40px; left:50%; transform:translateX(-50%); background:rgba(30,25,18,0.95); color:#e8dcc0; border:1px solid #38bdf8; border-radius:6px; padding:8px 16px; font-size:12px; z-index:999; box-shadow: 0 4px 12px rgba(0,0,0,0.5); pointer-events: none;';
+    el.style.cssText = 'position:absolute; bottom:80px; left:50%; transform:translateX(-50%); background:rgba(30,25,18,0.95); color:#e8dcc0; border:1px solid #38bdf8; border-radius:6px; padding:8px 16px; font-size:12px; z-index:999; box-shadow: 0 4px 12px rgba(0,0,0,0.5); pointer-events: none;';
     document.body.appendChild(el);
   }
   el.textContent = msg; el.style.display = 'block';
@@ -76,7 +79,44 @@ export function iniciarUI() {
   function ativarFerramenta(botaoId, modo, msg) { document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('ativo')); const btn = document.getElementById(botaoId); if(btn) btn.classList.add('ativo'); setModoAtivo(modo); atualizarVisibilidadeAndares(); if(msg) showAviso(msg); }
 
   const simsPanel = document.getElementById('sims-panel'); if(simsPanel) simsPanel.style.display = 'flex'; 
-  document.querySelectorAll('.node-btn').forEach(btn => { btn.addEventListener('click', () => { const isAlreadyActive = btn.classList.contains('active'); document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active')); document.querySelectorAll('.sub-panel').forEach(panel => panel.classList.remove('active')); if (isAlreadyActive) { if(simsPanel) simsPanel.style.display = 'none'; ativarFerramenta('btnSairModo', null, 'Menu recolhido.'); } else { btn.classList.add('active'); const target = document.getElementById(btn.getAttribute('data-target')); if (target) target.classList.add('active'); if(simsPanel) simsPanel.style.display = 'flex'; } }); });
+  const playActionBar = document.getElementById('play-action-bar');
+
+  // NÓDULO DE TRANSIÇÃO DA MÁQUINA DE ESTADOS
+  document.querySelectorAll('.node-btn').forEach(btn => { 
+    btn.addEventListener('click', () => { 
+      const isAlreadyActive = btn.classList.contains('active'); 
+      const targetId = btn.getAttribute('data-target');
+
+      document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active')); 
+      document.querySelectorAll('.sub-panel').forEach(panel => panel.classList.remove('active')); 
+
+      if (isAlreadyActive) { 
+          if(simsPanel) simsPanel.style.display = 'none'; 
+          ativarFerramenta('btnSairModo', null, null); 
+      } else { 
+          btn.classList.add('active'); 
+          const target = document.getElementById(targetId); 
+          if (target) target.classList.add('active'); 
+          if(simsPanel) simsPanel.style.display = 'flex'; 
+
+          // MUDANÇA DE ESTADO GLOBAL
+          if (targetId === 'panel-construcao') {
+              estadoGlobal = 'construcao';
+              if (playActionBar) playActionBar.style.display = 'none';
+              showAviso("🏗️ Modo Construção: Geometria Destravada");
+          } else if (targetId === 'panel-tabuleiro') {
+              estadoGlobal = 'tabuleiro';
+              if (playActionBar) playActionBar.style.display = 'flex';
+              resetarEstadoConstrucao();
+              showAviso("♟️ Modo Tabuleiro: Geometria Trancada. Proteção contra acidentes ativa.");
+          } else {
+              estadoGlobal = targetId.split('-')[1]; // ex: 'imersao' ou 'grimorio'
+              if (playActionBar) playActionBar.style.display = 'none';
+              resetarEstadoConstrucao();
+          }
+      } 
+    }); 
+  });
 
   document.getElementById('btnSalvarMapa')?.addEventListener('click', exportarMapa);
   document.getElementById('btnCarregarMapa')?.addEventListener('click', () => document.getElementById('inputCarregarMapa').click());
@@ -105,11 +145,8 @@ export function iniciarUI() {
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Clique dentro de um cômodo fechado para gerar a cobertura.'));
   
-  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala, escada ou telhado para ver opções.'));
-
-  const botoesFuturos = ['btnModoTerreno']; botoesFuturos.forEach(id => { document.getElementById(id)?.addEventListener('click', () => showAviso("Em breve!")); });
+  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação Livre.'));
 
   document.getElementById('btnRedimensionarMapa')?.addEventListener('click', () => { const w = parseInt(document.getElementById('inputMapaX').value) || 32, d = parseInt(document.getElementById('inputMapaZ').value) || 18; redimensionarMapa(w, d); showAviso(`Tabuleiro redimensionado para ${w}x${d}.`); });
 
