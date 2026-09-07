@@ -1,7 +1,7 @@
-// js/ui.js - Cérebro da Máquina de Estados e Atalhos de Teclado
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais } from './construtor.js';
+// js/ui.js - Cérebro da Máquina de Estados e Mapeamento The Sims 1
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
-import { redimensionarMapa, gridHelper } from './mapa.js'; // Adicionado gridHelper para o atalho 'G'
+import { redimensionarMapa, gridHelper } from './mapa.js';
 
 export let estadoGlobal = 'construcao'; 
 
@@ -70,24 +70,77 @@ export function iniciarUI() {
   document.getElementById('btnAjuda')?.addEventListener('click', () => { const modal = document.getElementById('modalAjuda'); if (modal) modal.style.display = 'flex'; });
   document.getElementById('btnFecharAjuda')?.addEventListener('click', () => { const modal = document.getElementById('modalAjuda'); if (modal) modal.style.display = 'none'; });
   
-  // ATALHOS DE TECLADO COMPLETOS AQUI
+  // --- ATALHOS: THE SIMS 1 BUILD MODE ---
   window.addEventListener('keydown', e => { 
-      // Esc para fechar menus ou limpar ferramenta
+      // PROTEÇÃO DE INPUT: Evita disparar atalhos enquanto digita números/textos
+      const tag = e.target.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+
+      // F2: Build Mode
+      if (e.key === 'F2') {
+          e.preventDefault();
+          const btnConstrucao = document.querySelector('[data-target="panel-construcao"]');
+          if (btnConstrucao && !btnConstrucao.classList.contains('active')) btnConstrucao.click();
+      }
+
+      // Esc: Cancelar ferramenta e voltar para mãozinha
       if (e.key === 'Escape') { 
           const modal = document.getElementById('modalAjuda'); 
           if (modal && modal.style.display === 'flex') { modal.style.display = 'none'; } 
           else { const btnMaozinha = document.getElementById('btnSairModo'); if (btnMaozinha) btnMaozinha.click(); } 
       }
       
-      // Ctrl + Z e Ctrl + Shift + Z (Desfazer/Refazer)
+      // Ctrl + Z / Shift + Ctrl + Z (Desfazer / Refazer)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+          e.preventDefault();
           if (e.shiftKey) refazer(); else desfazer();
       }
 
-      // Tecla G (Ocultar/Exibir Grade)
+      // Tecla G: Ocultar Grade
       if (e.key.toLowerCase() === 'g' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
           if (gridHelper) gridHelper.visible = !gridHelper.visible;
       }
+
+      // M: Mover objeto selecionado
+      if (e.key.toLowerCase() === 'm' && estadoGlobal === 'construcao') { iniciarArrasteSelecionado(); }
+
+      // R: Rotacionar objeto selecionado
+      if (e.key.toLowerCase() === 'r' && estadoGlobal === 'construcao') { girarSelecionado('dir'); }
+
+      // Delete / Backspace: Apagar objeto selecionado
+      if ((e.key === 'Delete' || e.key === 'Backspace') && estadoGlobal === 'construcao') { deletarSelecionado(); }
+
+      // Page Up: Subir Andar
+      if (e.key === 'PageUp') { document.getElementById('camUp')?.click(); }
+
+      // Page Down: Descer Andar
+      if (e.key === 'PageDown') { document.getElementById('camDown')?.click(); }
+
+      // Home: Cycle Paredes (Full -> Cut -> Low -> Full)
+      if (e.key === 'Home') {
+          const btnFull = document.getElementById('camWallFull');
+          const btnCut = document.getElementById('camWallCut');
+          const btnLow = document.getElementById('camWallLow');
+          
+          if (btnFull.classList.contains('ativo')) { btnCut.click(); }
+          else if (btnCut.classList.contains('ativo')) { btnLow.click(); }
+          else { btnFull.click(); }
+      }
+
+      // End: Ocultar Tudo (Paredes Low + Telhado Desligado)
+      if (e.key === 'End') {
+          document.getElementById('camWallLow')?.click();
+          const btnRoof = document.getElementById('camRoofToggle');
+          if (btnRoof && btnRoof.classList.contains('ativo')) btnRoof.click(); 
+      }
+
+      // Vírgula e Ponto: Girar Câmera
+      if (e.key === ',') { document.getElementById('camRotLeft')?.click(); }
+      if (e.key === '.') { document.getElementById('camRotRight')?.click(); }
+
+      // Z / X ou + / - : Zoom In e Zoom Out
+      if (e.key.toLowerCase() === 'z' || e.key === '+') { document.getElementById('camZoomIn')?.click(); }
+      if (e.key.toLowerCase() === 'x' || e.key === '-') { document.getElementById('camZoomOut')?.click(); }
   });
 
   document.getElementById('btnAdicionarTextura')?.addEventListener('click', () => document.getElementById('inputAdicionarTextura').click());
@@ -116,7 +169,6 @@ export function iniciarUI() {
           if (target) target.classList.add('active'); 
           if(simsPanel) simsPanel.style.display = 'flex'; 
 
-          // MUDANÇA DE ESTADO GLOBAL
           if (targetId === 'panel-construcao') {
               estadoGlobal = 'construcao';
               if (playActionBar) playActionBar.style.display = 'none';
@@ -124,12 +176,12 @@ export function iniciarUI() {
           } else if (targetId === 'panel-tabuleiro') {
               estadoGlobal = 'tabuleiro';
               if (playActionBar) playActionBar.style.display = 'flex';
-              setModoAtivo(null); 
+              resetarEstadoConstrucao(); 
               showAviso("♟️ Modo Tabuleiro: Geometria Trancada.");
           } else {
               estadoGlobal = targetId.split('-')[1]; 
               if (playActionBar) playActionBar.style.display = 'none';
-              setModoAtivo(null);
+              resetarEstadoConstrucao();
           }
       } 
     }); 
@@ -163,9 +215,7 @@ export function iniciarUI() {
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
   
-  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Livre.'));
-
-  const botoesFuturos = ['btnModoTerreno']; botoesFuturos.forEach(id => { document.getElementById(id)?.addEventListener('click', () => showAviso("Em breve!")); });
+  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação Livre.'));
 
   document.getElementById('btnRedimensionarMapa')?.addEventListener('click', () => { const w = parseInt(document.getElementById('inputMapaX').value) || 32, d = parseInt(document.getElementById('inputMapaZ').value) || 18; redimensionarMapa(w, d); showAviso(`Tabuleiro redimensionado para ${w}x${d}.`); });
 
