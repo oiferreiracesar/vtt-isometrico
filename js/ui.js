@@ -1,4 +1,4 @@
-// js/ui.js - Interface com Gizmo Livre e Telhados Reativos
+// js/ui.js - Interface Inteligente: Gizmo Adaptável e Click-to-Roof
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -15,9 +15,17 @@ export function showAviso(msg) {
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-export function mostrarGizmo(x, y) {
+export function mostrarGizmo(x, y, tipoObj = 'comodo') {
     const g = document.getElementById('room-gizmo');
-    if(g) { g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; }
+    if(g) { 
+        g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; 
+        
+        // Se for telhado, removemos a largura (ele se ajusta à sala), mas mantemos Rotação e Altura!
+        const rotL = document.getElementById('gizmoRotLeft'); if(rotL) rotL.style.display = 'block';
+        const rotR = document.getElementById('gizmoRotRight'); if(rotR) rotR.style.display = 'block';
+        const wPlus = document.getElementById('gizmoWiden'); if(wPlus) wPlus.style.display = tipoObj === 'telhado' ? 'none' : 'block';
+        const wMin = document.getElementById('gizmoShrink'); if(wMin) wMin.style.display = tipoObj === 'telhado' ? 'none' : 'block';
+    }
 }
 
 export function esconderGizmo() { const g = document.getElementById('room-gizmo'); if(g) g.style.display = 'none'; }
@@ -97,7 +105,9 @@ export function iniciarUI() {
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado Liso: Arraste para criar a rampa.'));
+  
+  // A Nova Mecânica de Telhados ("Click-to-Roof")
+  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Clique dentro de um cômodo fechado para gerar a cobertura.'));
   
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala, escada ou telhado para ver opções.'));
 
