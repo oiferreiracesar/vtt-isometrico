@@ -1,4 +1,4 @@
-// js/construtor.js - Motor Completo: Auto-Roof, Máquina de Estados e Proteção Máxima de Materiais
+// js/construtor.js - Motor Completo: Auto-Roof, Máquina de Estados e Blindagem Anti-Crash
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta, estadoGlobal } from './ui.js';
@@ -147,7 +147,7 @@ function aplicarMateriaisImportados(mesh, matDataArray, objectType) {
 
 export function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) { 
     const mat = new THREE.MeshLambertMaterial(); 
-    if (!item) return mat; // SAFEGUARD EXTREMO CONTRA TELA PRETA
+    if (!item) return mat; 
     if (item.tipo === 'cor') { mat.color.set(item.cor); } 
     else { const tex = item.textura ? item.textura.clone() : new THREE.TextureLoader().load(item.dataUrl); tex.colorSpace = THREE.SRGBColorSpace; tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(repeatX, repeatY); mat.map = tex; mat.color.set(0xffffff); } 
     return mat; 
@@ -222,7 +222,6 @@ function registrarPintura(mesh) {
     if (!acaoAtual || !mesh || !mesh.material) return; 
     const jaPintado = acaoAtual.paint.find(p => p.obj === mesh); 
     if (!jaPintado) { 
-        // Armazena com segurança
         const oldMats = Array.isArray(mesh.material) ? mesh.material.map(m => m ? m.clone() : materialParede.clone()) : mesh.material.clone();
         acaoAtual.paint.push({ obj: mesh, oldMats, newMats: null }); 
     } 
@@ -262,6 +261,7 @@ function raycastPlanoBase(clientX, clientY) {
     return null; 
 }
 
+// 🔥 A BLINDAGEM MESTRA QUE CURA O ERRO DE "SIDE" NO CONSOLE 🔥
 function raycastObjetosDoNivel(clientX, clientY) { 
     mouseNdc.x = (clientX / window.innerWidth) * 2 - 1; mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1; 
     raycaster.setFromCamera(mouseNdc, camera); 
@@ -269,13 +269,29 @@ function raycastObjetosDoNivel(clientX, clientY) {
     const pilaresF = pilaresConstruidos.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh); 
     const pisosF = pisosConstruidos.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh); 
     const colunasF = colunasSustentacao.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh); 
-    const escadasF = []; escadasConstruidas.forEach(e => { if (e.nivel === configsCamera.nivel) escadasF.push(...e.mesh.children); }); 
+    const escadasF = []; escadasConstruidas.forEach(e => { if (e.nivel === configsCamera.nivel) escadasF.push(e.mesh); }); 
     const telhadosF = []; telhadosConstruidos.forEach(t => { if (t.nivel === configsCamera.nivel) telhadosF.push(t.mesh); });
     
     const objetosNivel = [...paredesF, ...pilaresF, ...pisosF, ...colunasF, ...escadasF, ...telhadosF]; 
     if (configsCamera.nivel === 0 && meshChaoBase) objetosNivel.push(meshChaoBase); 
     if (configsCamera.nivel < 0 && meshChaoMasmorra) objetosNivel.push(meshChaoMasmorra); 
     
+    // Auto-Cura: Injeta um material base em qualquer objeto corrompido antes do Raycaster ler
+    objetosNivel.forEach(obj => {
+        if (obj) {
+            obj.traverse(child => {
+                if (child.isMesh) {
+                    if (!child.material) child.material = materialParede.clone();
+                    else if (Array.isArray(child.material)) {
+                        for (let i = 0; i < child.material.length; i++) {
+                            if (!child.material[i]) child.material[i] = materialParede.clone();
+                        }
+                    }
+                }
+            });
+        }
+    });
+
     const hits = raycaster.intersectObjects(objetosNivel, true); 
     return hits.length ? hits[0] : null; 
 }
@@ -391,6 +407,7 @@ export function reconstruirTelhadoPiramide(telhado) {
     const w = telhado.largura; const d = telhado.profundidade; const h = telhado.alturaTelhado;
     const geo = new THREE.ConeGeometry(Math.SQRT2 / 2, 1, 4); geo.rotateY(Math.PI / 4);
     
+    // Fallback safe layer for textures
     const matBase = telhado.textura ? gerarMaterialPintura(telhado.textura, Math.max(1, w/configMapa.tamanhoGrid), Math.max(1, d/configMapa.tamanhoGrid)) : materialTelhadoPadrão.clone();
     const matBottom = new THREE.MeshBasicMaterial({ color: 0x000000, visible: false });
     const pyramid = new THREE.Mesh(geo, [matBase, matBottom]);
@@ -554,7 +571,7 @@ canvas?.addEventListener('pointerdown', e => {
           } else { celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); }
       } else {
           if (isTelhado) { 
-              isTelhado.mesh.children.forEach(piramide => { registrarPintura(piramide); piramide.material = isRemocao ? getSafeMaterialArray(piramide) : [gerarMaterialPintura(item, Math.max(1, isTelhado.largura/configMapa.tamanhoGrid), Math.max(1, isTelhado.profundidade/configMapa.tamanhoGrid)), new THREE.MeshBasicMaterial({ color: 0x000000, visible: false })]; finalizarPintura(piramide); });
+              isTelhado.mesh.children.forEach(piramide => { registrarPintura(piramide); piramide.material = isRemocao ? [materialTelhadoPadrão.clone(), new THREE.MeshBasicMaterial({ color: 0x000000, visible: false })] : [gerarMaterialPintura(item, Math.max(1, isTelhado.largura/configMapa.tamanhoGrid), Math.max(1, isTelhado.profundidade/configMapa.tamanhoGrid)), new THREE.MeshBasicMaterial({ color: 0x000000, visible: false })]; finalizarPintura(piramide); });
               isTelhado.textura = isRemocao ? null : item; return; 
           }
           if (targetObject && (isParede || isPilar || isColuna)) {
@@ -576,7 +593,6 @@ function aplicarMaterialNaFace(mesh, faceIndex, item) {
     const groupsLen = mesh.geometry.groups && mesh.geometry.groups.length > 0 ? mesh.geometry.groups.length : 6; 
     const safeFaceIndex = (faceIndex !== undefined && faceIndex < groupsLen) ? faceIndex : 0;
     
-    // BLINDAGEM MÁXIMA PARA EVITAR ERRO DE `side`
     let novosMateriais = [];
     if (Array.isArray(mesh.material)) {
         for (let i = 0; i < groupsLen; i++) novosMateriais.push(mesh.material[i] ? mesh.material[i].clone() : materialParede.clone());
@@ -739,7 +755,7 @@ window.addEventListener('pointerup', e => {
         if (['parede', 'retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) { verificarSalasFechadas(px, pz, pontoA); }
       }
     }
-    arrastandoConstrucao = false; pontoA = null; previaMesh.visible = false;
+    arrastandoConstrucao = false; pontoA = null; previaMesh.visible = false; previaEscadaInicio.visible = false; previaEscadaFim.visible = false;
   }
   finalizarAcao(); 
 });
