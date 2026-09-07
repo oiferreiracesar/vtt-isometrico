@@ -1,4 +1,4 @@
-// js/ui.js - Bibliotecas de Texturas e Manifesto
+// js/ui.js - Máquina de Estados e Bibliotecas Categorizadas
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa, gridHelper } from './mapa.js';
@@ -32,10 +32,9 @@ export function mostrarGizmo(x, y, tipoObj = 'comodo') {
 
 export function esconderGizmo() { const g = document.getElementById('room-gizmo'); if(g) g.style.display = 'none'; }
 
-// ESTRUTURA DE BIBLIOTECAS
-export let paletas = { parede: [], chao: [], telhado: [] };
-export let idPaletaSelecionada = { parede: null, chao: null, telhado: null };
-export let categoriaPaletaAtual = 'parede'; 
+export let paletas = { pedra: [], madeira: [], grama: [], azulejo: [], telha: [] };
+export let idPaletaSelecionada = { pedra: null, madeira: null, grama: null, azulejo: null, telha: null };
+export let categoriaPaletaAtual = 'pedra'; 
 let proximoIdPaleta = 1;
 
 export function itemSelecionadoAtual() { 
@@ -48,7 +47,7 @@ export function selecionarMaterialNaPaleta(matAlvo) {
   let match = null;
   let catMatch = null;
 
-  for (const cat of ['parede', 'chao', 'telhado']) {
+  for (const cat of ['pedra', 'madeira', 'grama', 'azulejo', 'telha']) {
       if (matAlvo.map) match = paletas[cat].find(p => p.tipo === 'imagem' && p.textura && p.textura.uuid === matAlvo.map.uuid);
       else if (matAlvo.color) match = paletas[cat].find(p => p.tipo === 'cor' && p.cor.toLowerCase() === ('#' + matAlvo.color.getHexString()).toLowerCase());
       if (match) { catMatch = cat; break; }
@@ -85,70 +84,34 @@ function renderizarPaleta() {
 }
 
 function carregarBancoDeAssets() {
-  // Cores Sólidas Base (Garantia de segurança)
-  paletas.parede.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#e2e8f0' });
-  paletas.parede.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#334155' });
-  idPaletaSelecionada.parede = paletas.parede[0].id;
+  paletas.pedra.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#94a3b8' }); idPaletaSelecionada.pedra = paletas.pedra[0].id;
+  paletas.madeira.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#8a7550' }); idPaletaSelecionada.madeira = paletas.madeira[0].id;
+  paletas.grama.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#4ade80' }); idPaletaSelecionada.grama = paletas.grama[0].id;
+  paletas.azulejo.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#e2e8f0' }); idPaletaSelecionada.azulejo = paletas.azulejo[0].id;
+  paletas.telha.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#5c2b29' }); idPaletaSelecionada.telha = paletas.telha[0].id;
 
-  paletas.chao.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#8a7550' });
-  idPaletaSelecionada.chao = paletas.chao[0].id;
+  const loader = new THREE.TextureLoader(); loader.setCrossOrigin('Anonymous'); 
 
-  paletas.telhado.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#5c2b29' });
-  idPaletaSelecionada.telhado = paletas.telhado[0].id;
+  // --- COLOQUE OS NOMES DOS SEUS ARQUIVOS AQUI ---
+  const texturasPedra = [];
+  const texturasMadeira = [];
+  const texturasGrama = [];
+  const texturasAzulejo = [];
+  const texturasTelha = [];
 
-  const loader = new THREE.TextureLoader(); 
-  loader.setCrossOrigin('Anonymous'); 
-
-  // ==========================================
-  // O SEU "MANIFESTO" DE TEXTURAS (Altere os nomes aqui!)
-  // ==========================================
-  
-  const texturasParedes = [
-      'pedra/minha_parede_1.jpg',
-      'madeira/parede_cabana.png'
-  ];
-
-  const texturasChao = [
-      'madeira/piso_tabuas.jpg',
-      'grama/grama_verde.jpg',
-      'azulejo/chao_pedra.png'
-  ];
-
-  const texturasTelhados = [
-      'telha/telhado_vermelho.jpg'
-  ];
-
-  // ==========================================
-  // MOTOR DE CARREGAMENTO AUTOMÁTICO
-  // ==========================================
-
-  texturasParedes.forEach(caminho => {
-      const url = `assets/texturas/${caminho}`;
-      loader.load(url, (tex) => { 
-          tex.colorSpace = THREE.SRGBColorSpace; 
-          paletas.parede.push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
-          renderizarPaleta(); 
+  const carregarLista = (lista, categoria) => {
+      lista.forEach(arquivo => {
+          const url = `assets/texturas/${categoria}/${arquivo}`;
+          loader.load(url, (tex) => { 
+              tex.colorSpace = THREE.SRGBColorSpace; 
+              paletas[categoria].push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
+              renderizarPaleta(); 
+          });
       });
-  });
+  };
 
-  texturasChao.forEach(caminho => {
-      const url = `assets/texturas/${caminho}`;
-      loader.load(url, (tex) => { 
-          tex.colorSpace = THREE.SRGBColorSpace; 
-          paletas.chao.push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
-          renderizarPaleta(); 
-      });
-  });
-
-  texturasTelhados.forEach(caminho => {
-      const url = `assets/texturas/${caminho}`;
-      loader.load(url, (tex) => { 
-          tex.colorSpace = THREE.SRGBColorSpace; 
-          paletas.telhado.push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
-          renderizarPaleta(); 
-      });
-  });
-
+  carregarLista(texturasPedra, 'pedra'); carregarLista(texturasMadeira, 'madeira'); carregarLista(texturasGrama, 'grama');
+  carregarLista(texturasAzulejo, 'azulejo'); carregarLista(texturasTelha, 'telha');
   renderizarPaleta();
 }
 
@@ -162,18 +125,8 @@ export function iniciarUI() {
       const tag = e.target.tagName.toLowerCase();
       if (tag === 'input' || tag === 'textarea') return;
 
-      if (e.key === 'F2') {
-          e.preventDefault();
-          const btnConstrucao = document.querySelector('[data-target="panel-construcao"]');
-          if (btnConstrucao && !btnConstrucao.classList.contains('active')) btnConstrucao.click();
-      }
-
-      if (e.key === 'Escape') { 
-          const modal = document.getElementById('modalAjuda'); 
-          if (modal && modal.style.display === 'flex') { modal.style.display = 'none'; } 
-          else { const btnMaozinha = document.getElementById('btnSairModo'); if (btnMaozinha) btnMaozinha.click(); } 
-      }
-      
+      if (e.key === 'F2') { e.preventDefault(); const btnConstrucao = document.querySelector('[data-target="panel-construcao"]'); if (btnConstrucao && !btnConstrucao.classList.contains('active')) btnConstrucao.click(); }
+      if (e.key === 'Escape') { const modal = document.getElementById('modalAjuda'); if (modal && modal.style.display === 'flex') { modal.style.display = 'none'; } else { const btnMaozinha = document.getElementById('btnSairModo'); if (btnMaozinha) btnMaozinha.click(); } }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) refazer(); else desfazer(); }
       if (e.key.toLowerCase() === 'g' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) { if (gridHelper) gridHelper.visible = !gridHelper.visible; }
 
@@ -183,17 +136,8 @@ export function iniciarUI() {
 
       if (e.key === 'PageUp') { document.getElementById('camUp')?.click(); }
       if (e.key === 'PageDown') { document.getElementById('camDown')?.click(); }
-
-      if (e.key === 'Home') {
-          const btnFull = document.getElementById('camWallFull'); const btnCut = document.getElementById('camWallCut'); const btnLow = document.getElementById('camWallLow');
-          if (btnFull.classList.contains('ativo')) { btnCut.click(); } else if (btnCut.classList.contains('ativo')) { btnLow.click(); } else { btnFull.click(); }
-      }
-
-      if (e.key === 'End') {
-          document.getElementById('camWallLow')?.click();
-          const btnRoof = document.getElementById('camRoofToggle');
-          if (btnRoof && btnRoof.classList.contains('ativo')) btnRoof.click(); 
-      }
+      if (e.key === 'Home') { const btnFull = document.getElementById('camWallFull'); const btnCut = document.getElementById('camWallCut'); const btnLow = document.getElementById('camWallLow'); if (btnFull.classList.contains('ativo')) { btnCut.click(); } else if (btnCut.classList.contains('ativo')) { btnLow.click(); } else { btnFull.click(); } }
+      if (e.key === 'End') { document.getElementById('camWallLow')?.click(); const btnRoof = document.getElementById('camRoofToggle'); if (btnRoof && btnRoof.classList.contains('ativo')) btnRoof.click(); }
 
       if (e.key === ',') { document.getElementById('camRotLeft')?.click(); }
       if (e.key === '.') { document.getElementById('camRotRight')?.click(); }
@@ -201,7 +145,6 @@ export function iniciarUI() {
       if (e.key.toLowerCase() === 'x' || e.key === '-') { document.getElementById('camZoomOut')?.click(); }
   });
 
-  // LOGICA DAS ABAS DE CATEGORIA
   document.querySelectorAll('.paleta-tab').forEach(btn => {
       btn.addEventListener('click', (e) => {
           document.querySelectorAll('.paleta-tab').forEach(b => b.classList.remove('ativo'));
@@ -216,19 +159,15 @@ export function iniciarUI() {
       Array.from(e.target.files || []).forEach(arquivo => { 
           const leitor = new FileReader(); leitor.onload = ev => { 
               const dataUrl = ev.target.result; const textura = new THREE.TextureLoader().load(dataUrl); textura.colorSpace = THREE.SRGBColorSpace; 
-              const id = proximoIdPaleta++; 
-              paletas[categoriaPaletaAtual].push({ id, tipo: 'imagem', dataUrl, textura }); 
-              idPaletaSelecionada[categoriaPaletaAtual] = id; 
+              const id = proximoIdPaleta++; paletas[categoriaPaletaAtual].push({ id, tipo: 'imagem', dataUrl, textura }); idPaletaSelecionada[categoriaPaletaAtual] = id; 
               renderizarPaleta(); showAviso(`Material adicionado na pasta: ${categoriaPaletaAtual.toUpperCase()}.`); 
-          }; 
-          leitor.readAsDataURL(arquivo); 
+          }; leitor.readAsDataURL(arquivo); 
       }); 
   });
   
   document.getElementById('btnAdicionarCor')?.addEventListener('click', () => { 
       const cor = document.getElementById('inputCorNova').value; const id = proximoIdPaleta++; 
-      paletas[categoriaPaletaAtual].push({ id, tipo: 'cor', cor }); 
-      idPaletaSelecionada[categoriaPaletaAtual] = id; 
+      paletas[categoriaPaletaAtual].push({ id, tipo: 'cor', cor }); idPaletaSelecionada[categoriaPaletaAtual] = id; 
       renderizarPaleta(); showAviso(`Cor adicionada na pasta: ${categoriaPaletaAtual.toUpperCase()}.`); 
   });
 
@@ -248,18 +187,11 @@ export function iniciarUI() {
           btn.classList.add('active'); const target = document.getElementById(targetId); if (target) target.classList.add('active'); if(simsPanel) simsPanel.style.display = 'flex'; 
 
           if (targetId === 'panel-construcao') {
-              estadoGlobal = 'construcao';
-              if (playActionBar) playActionBar.style.display = 'none';
-              showAviso("🏗️ Modo Construção: Geometria Destravada");
+              estadoGlobal = 'construcao'; if (playActionBar) playActionBar.style.display = 'none'; showAviso("🏗️ Modo Construção: Geometria Destravada");
           } else if (targetId === 'panel-tabuleiro') {
-              estadoGlobal = 'tabuleiro';
-              if (playActionBar) playActionBar.style.display = 'flex';
-              resetarEstadoConstrucao(); 
-              showAviso("♟️ Modo Tabuleiro: Geometria Trancada.");
+              estadoGlobal = 'tabuleiro'; if (playActionBar) playActionBar.style.display = 'flex'; resetarEstadoConstrucao(); showAviso("♟️ Modo Tabuleiro: Geometria Trancada.");
           } else {
-              estadoGlobal = targetId.split('-')[1]; 
-              if (playActionBar) playActionBar.style.display = 'none';
-              resetarEstadoConstrucao();
+              estadoGlobal = targetId.split('-')[1]; if (playActionBar) playActionBar.style.display = 'none'; resetarEstadoConstrucao();
           }
       } 
     }); 
@@ -269,10 +201,8 @@ export function iniciarUI() {
   document.getElementById('btnCarregarMapa')?.addEventListener('click', () => document.getElementById('inputCarregarMapa').click());
   document.getElementById('inputCarregarMapa')?.addEventListener('change', e => { const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = ev => { try { const dados = JSON.parse(ev.target.result); importarMapa(dados); } catch(err) { showAviso("Erro ao ler o arquivo."); } }; reader.readAsText(file); e.target.value = ''; });
   document.getElementById('btnLimparMapa')?.addEventListener('click', () => { if(confirm("Demolir TODO O TABULEIRO? Isso não pode ser desfeito!")) limparMapa(); });
-
   document.getElementById('btnDesfazer')?.addEventListener('click', desfazer);
   document.getElementById('btnRefazer')?.addEventListener('click', refazer);
-
   document.getElementById('gizmoMove')?.addEventListener('click', iniciarArrasteSelecionado);
   document.getElementById('gizmoRotLeft')?.addEventListener('click', () => girarSelecionado('esq'));
   document.getElementById('gizmoRotRight')?.addEventListener('click', () => girarSelecionado('dir'));
@@ -293,7 +223,6 @@ export function iniciarUI() {
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
   document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Clique dentro de um cômodo fechado para gerar a cobertura.'));
-  
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Livre.'));
 
   const botoesFuturos = ['btnModoTerreno']; botoesFuturos.forEach(id => { document.getElementById(id)?.addEventListener('click', () => showAviso("Em breve!")); });

@@ -1,4 +1,4 @@
-// js/construtor.js
+// js/construtor.js - Motor Completo: Auto-Roof, Máquina de Estados e Proteções de Geometria
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta, estadoGlobal } from './ui.js';
@@ -133,9 +133,9 @@ function aplicarMateriaisImportados(mesh, matDataArray, objectType) {
 
     const groupsLen = mesh.geometry && mesh.geometry.groups && mesh.geometry.groups.length > 0 ? mesh.geometry.groups.length : 1;
     if (groupsLen > 1) {
-        const padded = []; const baseMat = materiais[0] || new THREE.MeshLambertMaterial({ color: '#ffffff' });
-        for(let i = 0; i < groupsLen; i++) padded.push(materiais[i] || baseMat.clone());
-        mesh.material = padded;
+        if (materiais.length === 1) { mesh.material = materiais[0]; } 
+        else if (materiais.length === groupsLen) { mesh.material = materiais; } 
+        else { const padded = []; for(let i = 0; i < groupsLen; i++) padded.push(materiais[i] ? materiais[i] : materiais[0].clone()); mesh.material = padded; }
     } else { mesh.material = materiais[0]; }
 
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
@@ -145,9 +145,7 @@ function aplicarMateriaisImportados(mesh, matDataArray, objectType) {
             if (objectType === 'piso' || objectType === 'escada' || objectType === 'telhado') { repeatX = configMapa.tamanhoGrid; repeatY = configMapa.tamanhoGrid; } 
             else if (mesh.geometry.parameters) {
                 const { width, height, depth } = mesh.geometry.parameters;
-                if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } 
-                else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } 
-                else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; }
+                if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; }
             }
             mat.map.repeat.set(repeatX, repeatY); mat.needsUpdate = true;
         }
@@ -239,12 +237,7 @@ const raycaster = new THREE.Raycaster(); const mouseNdc = new THREE.Vector2();
 function snapGrid(valor) { return Math.round(valor / configMapa.tamanhoGrid) * configMapa.tamanhoGrid; }
 function snapMeioGrid(valor) { return Math.round(valor / (configMapa.tamanhoGrid/2)) * (configMapa.tamanhoGrid/2); }
 function snapCentroCelula(valor) { return Math.floor(valor / configMapa.tamanhoGrid) * configMapa.tamanhoGrid + configMapa.tamanhoGrid / 2; }
-
-// AGORA LÊ A CAIXINHA DA INTERFACE NOVAMENTE
-function obterAltura() { 
-    const input = document.getElementById('inputAlturaParede');
-    return input ? (parseFloat(input.value) || 3.0) : 3.0; 
-}
+function obterAltura() { return parseFloat(document.getElementById('inputAlturaParede')?.value) || 3.0; }
 
 function clampHit(point) {
     const maxX = configMapa.largura / 2; const maxZ = configMapa.profundidade / 2;
@@ -445,7 +438,7 @@ canvas?.addEventListener('dblclick', e => { const hit = raycastPlanoBase(e.clien
 
 canvas?.addEventListener('pointerdown', e => {
   if (e.button !== 0 && !(e.button === 2 && e.ctrlKey)) return;
-  if (estadoGlobal !== 'construcao') return; // BLOQUEIO DE ESTADO FÍSICO
+  if (estadoGlobal !== 'construcao') return; // BLOQUEIO DE ESTADO
 
   if (movendoSelecionado) { movendoSelecionado = false; pontoA = null; finalizarAcao(); limparSelecao(); showAviso("Posicionado!"); return; }
 
@@ -454,10 +447,8 @@ canvas?.addEventListener('pointerdown', e => {
       const chaoHit = raycastPlanoBase(e.clientX, e.clientY);
       const clickPoint = hitAll ? hitAll.point : (chaoHit ? chaoHit.point : null);
       if (clickPoint) {
-          let startX = snapCentroCelula(clickPoint.x); 
-          let startZ = snapCentroCelula(clickPoint.z);
+          let startX = snapCentroCelula(clickPoint.x); let startZ = snapCentroCelula(clickPoint.z);
           const { celulas } = encontrarAreaFechada(startX, startZ);
-          
           if (celulas.length > 0 && celulas.length < 5000) {
               let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
               const t = configMapa.tamanhoGrid;
