@@ -1,4 +1,4 @@
-// js/ui.js - Interface com Gizmo Livre para Telhados
+// js/ui.js - Interface com Gizmo Livre e Telhados Reativos
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -17,12 +17,7 @@ export function showAviso(msg) {
 
 export function mostrarGizmo(x, y) {
     const g = document.getElementById('room-gizmo');
-    if(g) { 
-        g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; 
-        // Agora todos os objetos (salas, escadas e telhados) podem ser girados livremente!
-        const rotL = document.getElementById('gizmoRotLeft'); if(rotL) rotL.style.display = 'block';
-        const rotR = document.getElementById('gizmoRotRight'); if(rotR) rotR.style.display = 'block';
-    }
+    if(g) { g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; }
 }
 
 export function esconderGizmo() { const g = document.getElementById('room-gizmo'); if(g) g.style.display = 'none'; }
@@ -102,7 +97,7 @@ export function iniciarUI() {
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Arraste para desenhar a rampa de elevação.'));
+  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado Liso: Arraste para criar a rampa.'));
   
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala, escada ou telhado para ver opções.'));
 
