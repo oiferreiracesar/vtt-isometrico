@@ -1,4 +1,4 @@
-// js/construtor.js - Motor Completo: Importação Segura e Estado Global
+// js/construtor.js - Motor Completo: Pirâmide, Auto-Roof e Máquina de Estados (Corrigido)
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta, estadoGlobal } from './ui.js';
@@ -145,7 +145,9 @@ function aplicarMateriaisImportados(mesh, matDataArray, objectType) {
             if (objectType === 'piso' || objectType === 'escada' || objectType === 'telhado') { repeatX = configMapa.tamanhoGrid; repeatY = configMapa.tamanhoGrid; } 
             else if (mesh.geometry.parameters) {
                 const { width, height, depth } = mesh.geometry.parameters;
-                if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; }
+                if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } 
+                else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } 
+                else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; }
             }
             mat.map.repeat.set(repeatX, repeatY); mat.needsUpdate = true;
         }
@@ -271,6 +273,10 @@ function raycastObjetosDoNivel(clientX, clientY) {
     objetosNivel.forEach(obj => { if (obj && Array.isArray(obj.material)) { for (let i = 0; i < obj.material.length; i++) { if (!obj.material[i]) obj.material[i] = materialParede.clone(); } } });
     const hits = raycaster.intersectObjects(objetosNivel, true); 
     return hits.length ? hits[0] : null; 
+}
+
+export function resetarEstadoConstrucao() {
+    setModoAtivo(null);
 }
 
 export function setModoAtivo(modo) { modoAtivo = modo; arrastandoConstrucao = false; pontoA = null; limparSelecao(); previaMesh.visible = false; previaEscadaInicio.visible = false; previaEscadaFim.visible = false; cursor3D.visible = false; const divMedida = document.getElementById('cursor-medida'); if(divMedida) divMedida.style.display = 'none'; }
