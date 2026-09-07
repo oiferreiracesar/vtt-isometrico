@@ -1,4 +1,4 @@
-// js/ui.js - Bibliotecas de Texturas com Busca Automática na API do GitHub
+// js/ui.js - Máquina de Estados e Bibliotecas Categorizadas com Fetch Automático (Case-Sensitive)
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa, gridHelper } from './mapa.js';
@@ -101,34 +101,42 @@ function carregarBancoDeAssets() {
   const githubUser = 'oiferreiracesar';
   const githubRepo = 'vtt-isometrico';
   
-  const categorias = ['pedra', 'madeira', 'grama', 'azulejo', 'telha'];
+  // Tradutor: Liga a aba do jogo (minúscula) com a pasta do GitHub (Maiúscula)
+  const mapeamentoPastas = [
+      { id: 'pedra', pasta: 'Pedra' },
+      { id: 'madeira', pasta: 'Madeira' },
+      { id: 'grama', pasta: 'Grama' },
+      { id: 'azulejo', pasta: 'Azulejo' },
+      { id: 'telha', pasta: 'Telha' }
+  ];
 
-  categorias.forEach(categoria => {
-      // Faz a requisição na pasta do repositório para listar o que tem lá dentro
-      fetch(`https://api.github.com/repos/${githubUser}/${githubRepo}/contents/assets/texturas/${categoria}`)
+  mapeamentoPastas.forEach(item => {
+      // Pergunta para o GitHub o que tem dentro da pasta exata
+      fetch(`https://api.github.com/repos/${githubUser}/${githubRepo}/contents/assets/texturas/${item.pasta}`)
           .then(response => {
-              if (!response.ok) throw new Error('A pasta pode estar vazia, nomeada diferente ou limite da API atingido.');
+              if (!response.ok) throw new Error('A pasta não foi encontrada ou o limite da API foi atingido.');
               return response.json();
           })
           .then(arquivos => {
               arquivos.forEach(arquivo => {
-                  // Filtra para carregar apenas imagens
+                  // Se for uma imagem, carrega no jogo
                   if (arquivo.type === 'file' && arquivo.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
-                      // Constrói o caminho relativo limpo
-                      const url = `assets/texturas/${categoria}/${arquivo.name}`;
+                      // Usa a Letra Maiúscula para a URL funcionar
+                      const url = `assets/texturas/${item.pasta}/${arquivo.name}`;
                       
                       loader.load(url, (tex) => { 
                           tex.colorSpace = THREE.SRGBColorSpace; 
-                          paletas[categoria].push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
+                          // Mas guarda na aba com letra minúscula
+                          paletas[item.id].push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
                           
-                          // Atualiza a interface apenas se a aba ativa for a mesma que está sendo carregada
-                          if (categoriaPaletaAtual === categoria) renderizarPaleta(); 
+                          // Atualiza a paleta na tela se a aba estiver aberta
+                          if (categoriaPaletaAtual === item.id) renderizarPaleta(); 
                       });
                   }
               });
           })
           .catch(error => {
-              console.warn(`Aviso de Leitura - Categoria [${categoria}]:`, error.message);
+              console.warn(`Aviso de Leitura - Pasta [${item.pasta}]:`, error.message);
           });
   });
 }
