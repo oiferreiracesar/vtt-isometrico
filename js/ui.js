@@ -1,5 +1,5 @@
-// js/ui.js - Máquina de Estados e Bibliotecas Categorizadas com Fetch Automático (Case-Sensitive)
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
+// js/ui.js - Bibliotecas de Texturas com Fetch Automático (Case-Sensitive)
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, exportarMapa, importarMapa, limparMapa } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa, gridHelper } from './mapa.js';
 
@@ -17,17 +17,9 @@ export function showAviso(msg) {
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-export function mostrarGizmo(x, y, tipoObj = 'comodo') {
+export function mostrarGizmo(x, y) {
     const g = document.getElementById('room-gizmo');
-    if(g) { 
-        g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; 
-        const rotL = document.getElementById('gizmoRotLeft'); if(rotL) rotL.style.display = tipoObj === 'telhado' ? 'none' : 'block';
-        const rotR = document.getElementById('gizmoRotRight'); if(rotR) rotR.style.display = tipoObj === 'telhado' ? 'none' : 'block';
-        const wPlus = document.getElementById('gizmoWiden'); if(wPlus) wPlus.style.display = tipoObj === 'telhado' ? 'none' : 'block';
-        const wMin = document.getElementById('gizmoShrink'); if(wMin) wMin.style.display = tipoObj === 'telhado' ? 'none' : 'block';
-        const tPlus = document.getElementById('gizmoTaller'); if(tPlus) tPlus.style.display = tipoObj === 'comodo' ? 'none' : 'block';
-        const tMin = document.getElementById('gizmoShorter'); if(tMin) tMin.style.display = tipoObj === 'comodo' ? 'none' : 'block';
-    }
+    if(g) { g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; }
 }
 
 export function esconderGizmo() { const g = document.getElementById('room-gizmo'); if(g) g.style.display = 'none'; }
@@ -44,8 +36,7 @@ export function itemSelecionadoAtual() {
 
 export function selecionarMaterialNaPaleta(matAlvo) {
   if (!matAlvo) return; 
-  let match = null;
-  let catMatch = null;
+  let match = null; let catMatch = null;
 
   for (const cat of ['pedra', 'madeira', 'grama', 'azulejo', 'telha']) {
       if (matAlvo.map) match = paletas[cat].find(p => p.tipo === 'imagem' && p.textura && p.textura.uuid === matAlvo.map.uuid);
@@ -57,11 +48,8 @@ export function selecionarMaterialNaPaleta(matAlvo) {
       categoriaPaletaAtual = catMatch;
       idPaletaSelecionada[catMatch] = match.id; 
       document.querySelectorAll('.paleta-tab').forEach(b => b.classList.toggle('ativo', b.getAttribute('data-cat') === catMatch));
-      renderizarPaleta(); 
-      showAviso("🎨 Pipeta: Material copiado e aba alterada!"); 
-  } else {
-      showAviso("Material não encontrado nas bibliotecas base.");
-  }
+      renderizarPaleta(); showAviso("🎨 Pipeta: Textura copiada para o balde!"); 
+  } else { showAviso("Material não encontrado nas bibliotecas base."); }
 }
 
 function renderizarPaleta() {
@@ -84,60 +72,34 @@ function renderizarPaleta() {
 }
 
 function carregarBancoDeAssets() {
-  // Cores Sólidas (Garantem que sempre haja algo selecionado)
   paletas.pedra.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#94a3b8' }); idPaletaSelecionada.pedra = paletas.pedra[0].id;
   paletas.madeira.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#8a7550' }); idPaletaSelecionada.madeira = paletas.madeira[0].id;
   paletas.grama.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#4ade80' }); idPaletaSelecionada.grama = paletas.grama[0].id;
   paletas.azulejo.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#e2e8f0' }); idPaletaSelecionada.azulejo = paletas.azulejo[0].id;
   paletas.telha.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#5c2b29' }); idPaletaSelecionada.telha = paletas.telha[0].id;
 
-  const loader = new THREE.TextureLoader(); 
-  loader.setCrossOrigin('Anonymous'); 
-  renderizarPaleta();
+  const loader = new THREE.TextureLoader(); loader.setCrossOrigin('Anonymous'); renderizarPaleta();
 
-  // ==========================================
-  // MOTOR DE BUSCA AUTOMÁTICA NA API DO GITHUB
-  // ==========================================
   const githubUser = 'oiferreiracesar';
   const githubRepo = 'vtt-isometrico';
   
-  // Tradutor: Liga a aba do jogo (minúscula) com a pasta do GitHub (Maiúscula)
-  const mapeamentoPastas = [
-      { id: 'pedra', pasta: 'Pedra' },
-      { id: 'madeira', pasta: 'Madeira' },
-      { id: 'grama', pasta: 'Grama' },
-      { id: 'azulejo', pasta: 'Azulejo' },
-      { id: 'telha', pasta: 'Telha' }
-  ];
+  const mapeamentoPastas = [ { id: 'pedra', pasta: 'Pedra' }, { id: 'madeira', pasta: 'Madeira' }, { id: 'grama', pasta: 'Grama' }, { id: 'azulejo', pasta: 'Azulejo' }, { id: 'telha', pasta: 'Telha' } ];
 
   mapeamentoPastas.forEach(item => {
-      // Pergunta para o GitHub o que tem dentro da pasta exata
       fetch(`https://api.github.com/repos/${githubUser}/${githubRepo}/contents/assets/texturas/${item.pasta}`)
-          .then(response => {
-              if (!response.ok) throw new Error('A pasta não foi encontrada ou o limite da API foi atingido.');
-              return response.json();
-          })
+          .then(response => { if (!response.ok) throw new Error('Limite da API atingido ou pasta vazia.'); return response.json(); })
           .then(arquivos => {
               arquivos.forEach(arquivo => {
-                  // Se for uma imagem, carrega no jogo
                   if (arquivo.type === 'file' && arquivo.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
-                      // Usa a Letra Maiúscula para a URL funcionar
                       const url = `assets/texturas/${item.pasta}/${arquivo.name}`;
-                      
                       loader.load(url, (tex) => { 
                           tex.colorSpace = THREE.SRGBColorSpace; 
-                          // Mas guarda na aba com letra minúscula
                           paletas[item.id].push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
-                          
-                          // Atualiza a paleta na tela se a aba estiver aberta
                           if (categoriaPaletaAtual === item.id) renderizarPaleta(); 
                       });
                   }
               });
-          })
-          .catch(error => {
-              console.warn(`Aviso de Leitura - Pasta [${item.pasta}]:`, error.message);
-          });
+          }).catch(error => { console.warn(`Aviso de Leitura - Pasta [${item.pasta}]:`, error.message); });
   });
 }
 
@@ -153,6 +115,8 @@ export function iniciarUI() {
 
       if (e.key === 'F2') { e.preventDefault(); const btnConstrucao = document.querySelector('[data-target="panel-construcao"]'); if (btnConstrucao && !btnConstrucao.classList.contains('active')) btnConstrucao.click(); }
       if (e.key === 'Escape') { const modal = document.getElementById('modalAjuda'); if (modal && modal.style.display === 'flex') { modal.style.display = 'none'; } else { const btnMaozinha = document.getElementById('btnSairModo'); if (btnMaozinha) btnMaozinha.click(); } }
+      
+      // MAIOR COMPATIBILIDADE COM MAC AQUI:
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) refazer(); else desfazer(); }
       if (e.key.toLowerCase() === 'g' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) { if (gridHelper) gridHelper.visible = !gridHelper.visible; }
 
@@ -212,13 +176,9 @@ export function iniciarUI() {
       } else { 
           btn.classList.add('active'); const target = document.getElementById(targetId); if (target) target.classList.add('active'); if(simsPanel) simsPanel.style.display = 'flex'; 
 
-          if (targetId === 'panel-construcao') {
-              estadoGlobal = 'construcao'; if (playActionBar) playActionBar.style.display = 'none'; showAviso("🏗️ Modo Construção: Geometria Destravada");
-          } else if (targetId === 'panel-tabuleiro') {
-              estadoGlobal = 'tabuleiro'; if (playActionBar) playActionBar.style.display = 'flex'; resetarEstadoConstrucao(); showAviso("♟️ Modo Tabuleiro: Geometria Trancada.");
-          } else {
-              estadoGlobal = targetId.split('-')[1]; if (playActionBar) playActionBar.style.display = 'none'; resetarEstadoConstrucao();
-          }
+          if (targetId === 'panel-construcao') { estadoGlobal = 'construcao'; if (playActionBar) playActionBar.style.display = 'none'; showAviso("🏗️ Modo Construção: Geometria Destravada"); } 
+          else if (targetId === 'panel-tabuleiro') { estadoGlobal = 'tabuleiro'; if (playActionBar) playActionBar.style.display = 'flex'; resetarEstadoConstrucao(); showAviso("♟️ Modo Tabuleiro: Geometria Trancada."); } 
+          else { estadoGlobal = targetId.split('-')[1]; if (playActionBar) playActionBar.style.display = 'none'; resetarEstadoConstrucao(); }
       } 
     }); 
   });
@@ -235,8 +195,6 @@ export function iniciarUI() {
   document.getElementById('gizmoDelete')?.addEventListener('click', deletarSelecionado);
   document.getElementById('gizmoWiden')?.addEventListener('click', () => alterarDimensaoGizmo(1));
   document.getElementById('gizmoShrink')?.addEventListener('click', () => alterarDimensaoGizmo(-1));
-  document.getElementById('gizmoTaller')?.addEventListener('click', () => alterarAlturaGizmo(1));
-  document.getElementById('gizmoShorter')?.addEventListener('click', () => alterarAlturaGizmo(-1));
 
   document.getElementById('btnModoParede')?.addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
   document.getElementById('btnModoCerca')?.addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
@@ -244,7 +202,7 @@ export function iniciarUI() {
   document.getElementById('btnModoTriangulo')?.addEventListener('click', () => ativarFerramenta('btnModoTriangulo', 'triangulo', 'Sala Triangular: Clique e arraste.'));
   document.getElementById('btnModoOctogono')?.addEventListener('click', () => ativarFerramenta('btnModoOctogono', 'octogono', 'Sala Octogonal: Clique e arraste.'));
   document.getElementById('btnModoPorta')?.addEventListener('click', () => ativarFerramenta('btnModoPorta', 'porta', 'Modo Porta: Clique nas paredes para instalar.'));
-  document.getElementById('btnModoPintura')?.addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo, Ctrl = Remover, Alt = Pipeta)'));
+  document.getElementById('btnModoPintura')?.addEventListener('click', () => ativarFerramenta('btnModoPintura', 'pintura', 'Pintura: (Shift = Preencher tudo, Botão Direito = Apagar, Alt = Pipeta)'));
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
@@ -268,6 +226,4 @@ export function iniciarUI() {
   btnWallFull?.addEventListener('click', () => { clearWallActive(); btnWallFull.classList.add('ativo'); atualizarVisibilidadeAndares('full'); });
   btnWallCut?.addEventListener('click', () => { clearWallActive(); btnWallCut.classList.add('ativo'); atualizarVisibilidadeAndares('cut'); });
   btnWallLow?.addEventListener('click', () => { clearWallActive(); btnWallLow.classList.add('ativo'); atualizarVisibilidadeAndares('low'); });
-
-  document.getElementById('camRoofToggle')?.addEventListener('click', (e) => { e.currentTarget.classList.toggle('ativo'); toggleTelhadosGlobais(e.currentTarget.classList.contains('ativo')); });
 }
