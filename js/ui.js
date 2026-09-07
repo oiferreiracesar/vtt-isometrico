@@ -1,4 +1,4 @@
-// js/ui.js - Máquina de Estados e Bibliotecas Categorizadas
+// js/ui.js - Bibliotecas de Texturas com Busca Automática na API do GitHub
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa, gridHelper } from './mapa.js';
@@ -68,7 +68,7 @@ function renderizarPaleta() {
   const div = document.getElementById('paletaTexturas'); if (!div) return; div.innerHTML = '';
   const listaAtual = paletas[categoriaPaletaAtual];
 
-  if (!listaAtual.length) { div.innerHTML = '<span class="paletaVazia">Pasta Vazia...</span>'; return; }
+  if (!listaAtual.length) { div.innerHTML = '<span class="paletaVazia">Carregando texturas...</span>'; return; }
   
   listaAtual.forEach(item => {
     const sw = document.createElement('div'); 
@@ -84,35 +84,53 @@ function renderizarPaleta() {
 }
 
 function carregarBancoDeAssets() {
+  // Cores Sólidas (Garantem que sempre haja algo selecionado)
   paletas.pedra.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#94a3b8' }); idPaletaSelecionada.pedra = paletas.pedra[0].id;
   paletas.madeira.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#8a7550' }); idPaletaSelecionada.madeira = paletas.madeira[0].id;
   paletas.grama.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#4ade80' }); idPaletaSelecionada.grama = paletas.grama[0].id;
   paletas.azulejo.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#e2e8f0' }); idPaletaSelecionada.azulejo = paletas.azulejo[0].id;
   paletas.telha.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#5c2b29' }); idPaletaSelecionada.telha = paletas.telha[0].id;
 
-  const loader = new THREE.TextureLoader(); loader.setCrossOrigin('Anonymous'); 
-
-  // --- COLOQUE OS NOMES DOS SEUS ARQUIVOS AQUI ---
-  const texturasPedra = [];
-  const texturasMadeira = [];
-  const texturasGrama = [];
-  const texturasAzulejo = [];
-  const texturasTelha = [];
-
-  const carregarLista = (lista, categoria) => {
-      lista.forEach(arquivo => {
-          const url = `assets/texturas/${categoria}/${arquivo}`;
-          loader.load(url, (tex) => { 
-              tex.colorSpace = THREE.SRGBColorSpace; 
-              paletas[categoria].push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
-              renderizarPaleta(); 
-          });
-      });
-  };
-
-  carregarLista(texturasPedra, 'pedra'); carregarLista(texturasMadeira, 'madeira'); carregarLista(texturasGrama, 'grama');
-  carregarLista(texturasAzulejo, 'azulejo'); carregarLista(texturasTelha, 'telha');
+  const loader = new THREE.TextureLoader(); 
+  loader.setCrossOrigin('Anonymous'); 
   renderizarPaleta();
+
+  // ==========================================
+  // MOTOR DE BUSCA AUTOMÁTICA NA API DO GITHUB
+  // ==========================================
+  const githubUser = 'oiferreiracesar';
+  const githubRepo = 'vtt-isometrico';
+  
+  const categorias = ['pedra', 'madeira', 'grama', 'azulejo', 'telha'];
+
+  categorias.forEach(categoria => {
+      // Faz a requisição na pasta do repositório para listar o que tem lá dentro
+      fetch(`https://api.github.com/repos/${githubUser}/${githubRepo}/contents/assets/texturas/${categoria}`)
+          .then(response => {
+              if (!response.ok) throw new Error('A pasta pode estar vazia, nomeada diferente ou limite da API atingido.');
+              return response.json();
+          })
+          .then(arquivos => {
+              arquivos.forEach(arquivo => {
+                  // Filtra para carregar apenas imagens
+                  if (arquivo.type === 'file' && arquivo.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
+                      // Constrói o caminho relativo limpo
+                      const url = `assets/texturas/${categoria}/${arquivo.name}`;
+                      
+                      loader.load(url, (tex) => { 
+                          tex.colorSpace = THREE.SRGBColorSpace; 
+                          paletas[categoria].push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
+                          
+                          // Atualiza a interface apenas se a aba ativa for a mesma que está sendo carregada
+                          if (categoriaPaletaAtual === categoria) renderizarPaleta(); 
+                      });
+                  }
+              });
+          })
+          .catch(error => {
+              console.warn(`Aviso de Leitura - Categoria [${categoria}]:`, error.message);
+          });
+  });
 }
 
 export function iniciarUI() {
