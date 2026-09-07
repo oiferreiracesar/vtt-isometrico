@@ -1,4 +1,4 @@
-// js/construtor.js - Motor Completo: Pirâmide, Auto-Roof e Máquina de Estados (Corrigido)
+// js/construtor.js
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta, estadoGlobal } from './ui.js';
@@ -239,7 +239,12 @@ const raycaster = new THREE.Raycaster(); const mouseNdc = new THREE.Vector2();
 function snapGrid(valor) { return Math.round(valor / configMapa.tamanhoGrid) * configMapa.tamanhoGrid; }
 function snapMeioGrid(valor) { return Math.round(valor / (configMapa.tamanhoGrid/2)) * (configMapa.tamanhoGrid/2); }
 function snapCentroCelula(valor) { return Math.floor(valor / configMapa.tamanhoGrid) * configMapa.tamanhoGrid + configMapa.tamanhoGrid / 2; }
-function obterAltura() { return parseFloat(document.getElementById('inputAlturaParede')?.value) || 3; }
+
+// AGORA LÊ A CAIXINHA DA INTERFACE NOVAMENTE
+function obterAltura() { 
+    const input = document.getElementById('inputAlturaParede');
+    return input ? (parseFloat(input.value) || 3.0) : 3.0; 
+}
 
 function clampHit(point) {
     const maxX = configMapa.largura / 2; const maxZ = configMapa.profundidade / 2;
