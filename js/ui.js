@@ -1,4 +1,4 @@
-// js/ui.js - Bibliotecas de Texturas com Cache de API (Anti-Crash)
+// js/ui.js - Bibliotecas de Texturas com Cache de API (Anti-Crash) e Categorias
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa, gridHelper } from './mapa.js';
@@ -79,7 +79,6 @@ function renderizarPaleta() {
 }
 
 function carregarBancoDeAssets() {
-  // Cores Sólidas Garantidas
   paletas.pedra.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#94a3b8' }); idPaletaSelecionada.pedra = paletas.pedra[0].id;
   paletas.madeira.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#8a7550' }); idPaletaSelecionada.madeira = paletas.madeira[0].id;
   paletas.grama.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#4ade80' }); idPaletaSelecionada.grama = paletas.grama[0].id;
@@ -111,7 +110,6 @@ function carregarBancoDeAssets() {
       const cachedData = localStorage.getItem(cacheKey);
       const cacheTime = localStorage.getItem(cacheTimeKey);
 
-      // Se existir Cache e for de hoje (evita bloquear no limite da API)
       if (cachedData && cacheTime && (Date.now() - cacheTime < 86400000)) {
           processarArquivosDaAPI(JSON.parse(cachedData), item);
       } else {
@@ -133,7 +131,6 @@ function carregarBancoDeAssets() {
 export function iniciarUI() {
   carregarBancoDeAssets();
 
-  // Adiciona o Botão de Sincronização Dinamicamente
   const paletaBotoes = document.getElementById('paletaBotoes');
   if (paletaBotoes && !document.getElementById('btnSyncAPI')) {
       const btnSync = document.createElement('button');
@@ -244,7 +241,7 @@ export function iniciarUI() {
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Clique dentro da sala para gerar a cobertura.'));
+  
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Livre.'));
 
   document.getElementById('btnRedimensionarMapa')?.addEventListener('click', () => { const w = parseInt(document.getElementById('inputMapaX').value) || 32, d = parseInt(document.getElementById('inputMapaZ').value) || 18; redimensionarMapa(w, d); showAviso(`Tabuleiro redimensionado para ${w}x${d}.`); });

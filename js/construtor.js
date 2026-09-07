@@ -1,4 +1,4 @@
-// js/construtor.js - Motor Completo: Auto-Roof, Máquina de Estados e Blindagem Anti-Crash
+// js/construtor.js - Motor Completo: Auto-Roof para Polígonos, QoL e Anti-Crash
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta, estadoGlobal } from './ui.js';
@@ -85,10 +85,7 @@ function encontrarAreaFechada(xInicial, zInicial) {
     return { celulas, fechada }; 
 }
 
-function notificarMudancaAndar(nivelAlterado) {
-    telhadosConstruidos.filter(t => t.nivel === nivelAlterado - 1).forEach(t => reconstruirTelhadoPiramide(t));
-}
-
+function notificarMudancaAndar(nivelAlterado) { telhadosConstruidos.filter(t => t.nivel === nivelAlterado - 1).forEach(t => reconstruirTelhadoPiramide(t)); }
 function getRootTelhado(hitObject) { return telhadosConstruidos.find(t => { let p = hitObject; while(p) { if(p === t.mesh) return true; p = p.parent; } return false; }); }
 
 function resetEmissive(mesh) {
@@ -261,7 +258,7 @@ function raycastPlanoBase(clientX, clientY) {
     return null; 
 }
 
-// 🔥 A BLINDAGEM MESTRA QUE CURA O ERRO DE "SIDE" NO CONSOLE 🔥
+// 🔥 AUTO-CURA DO RAYCASTER PARA EVITAR ERROS DE "SIDE" 🔥
 function raycastObjetosDoNivel(clientX, clientY) { 
     mouseNdc.x = (clientX / window.innerWidth) * 2 - 1; mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1; 
     raycaster.setFromCamera(mouseNdc, camera); 
@@ -276,7 +273,6 @@ function raycastObjetosDoNivel(clientX, clientY) {
     if (configsCamera.nivel === 0 && meshChaoBase) objetosNivel.push(meshChaoBase); 
     if (configsCamera.nivel < 0 && meshChaoMasmorra) objetosNivel.push(meshChaoMasmorra); 
     
-    // Auto-Cura: Injeta um material base em qualquer objeto corrompido antes do Raycaster ler
     objetosNivel.forEach(obj => {
         if (obj) {
             obj.traverse(child => {
@@ -342,11 +338,20 @@ function atualizarGeometriaParede(parede) { const dx = parede.bx - parede.ax, dz
 function atualizarGeometriaPilar(pilar) { const alturaBase = pilar.nivel * obterAltura(); pilar.mesh.position.set(pilar.x, alturaBase + pilar.altura/2, pilar.z); }
 function obterOuCriarPilar(x, z, altura, isCerca, comodoId = null) { let pilar = pilaresConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01 && p.nivel === configsCamera.nivel && p.comodoId === comodoId); if (!pilar) { const mat = isCerca ? materialCerca : materialParede; const materiais = [mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone()]; const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, 0.25), materiais); const alturaBase = configsCamera.nivel * obterAltura(); mesh.position.set(x, alturaBase + altura / 2, z); scene.add(mesh); pilar = { mesh, x, z, altura, nivel: configsCamera.nivel, comodoId }; pilaresConstruidos.push(pilar); registrarAdicao('pilar', pilar, pilaresConstruidos); if (comodoId) { const c = comodosConstruidos.find(com => com.id === comodoId); if (c) c.pilares.push(pilar); } } return pilar; }
 
+// 🔥 CORREÇÃO DO AUTO-ROOF PARA TRIÂNGULOS E OCTÓGONOS 🔥
 function verificarSalasFechadas(px, pz, pontoA) {
     const pontosTeste = [];
-    if (['retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) { pontosTeste.push({ x: (pontoA.x + px)/2, z: (pontoA.z + pz)/2 }); } 
+    const cx = (pontoA.x + px)/2; const cz = (pontoA.z + pz)/2;
+    
+    if (['retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) { 
+        // Testa o centro e 4 pontos ligeiramente ao redor para evitar bater exatamente na parede
+        pontosTeste.push({ x: cx, z: cz }); 
+        pontosTeste.push({ x: cx + 0.5, z: cz + 0.5 });
+        pontosTeste.push({ x: cx - 0.5, z: cz - 0.5 });
+        pontosTeste.push({ x: cx + 0.5, z: cz - 0.5 });
+        pontosTeste.push({ x: cx - 0.5, z: cz + 0.5 });
+    } 
     else if (modoAtivo === 'parede') {
-        const cx = (pontoA.x + px)/2, cz = (pontoA.z + pz)/2;
         const angle = Math.atan2(px - pontoA.x, pz - pontoA.z);
         const nx = Math.cos(angle) * configMapa.tamanhoGrid;
         const nz = -Math.sin(angle) * configMapa.tamanhoGrid;
@@ -354,7 +359,9 @@ function verificarSalasFechadas(px, pz, pontoA) {
         pontosTeste.push({ x: cx - nx, z: cz - nz });
     }
 
-    pontosTeste.forEach(pt => {
+    let telhadoGerado = false;
+    for (const pt of pontosTeste) {
+        if (telhadoGerado) break;
         const startX = snapCentroCelula(pt.x), startZ = snapCentroCelula(pt.z);
         const { celulas, fechada } = encontrarAreaFechada(startX, startZ);
         if (fechada && celulas.length > 0) {
@@ -362,14 +369,15 @@ function verificarSalasFechadas(px, pz, pontoA) {
             const t = configMapa.tamanhoGrid;
             celulas.forEach(c => { minX = Math.min(minX, c.x - t/2); maxX = Math.max(maxX, c.x + t/2); minZ = Math.min(minZ, c.z - t/2); maxZ = Math.max(maxZ, c.z + t/2); });
             minX -= 0.25; maxX += 0.25; minZ -= 0.25; maxZ += 0.25;
-            const cx = (minX + maxX)/2, cz = (minZ + maxZ)/2;
-            const existe = telhadosConstruidos.find(t => t.nivel === configsCamera.nivel && Math.abs((t.ax+t.bx)/2 - cx) < 0.1 && Math.abs((t.az+t.bz)/2 - cz) < 0.1);
+            const centerAreaX = (minX + maxX)/2, centerAreaZ = (minZ + maxZ)/2;
+            const existe = telhadosConstruidos.find(t => t.nivel === configsCamera.nivel && Math.abs((t.ax+t.bx)/2 - centerAreaX) < 0.1 && Math.abs((t.az+t.bz)/2 - centerAreaZ) < 0.1);
             if (!existe) {
                 criarTelhado(minX, minZ, maxX, maxZ, 3.0);
                 showAviso("🏠 Cômodo fechado detectado! Telhado gerado automaticamente.");
+                telhadoGerado = true;
             }
         }
-    });
+    }
 }
 
 function criarSegmentoParede(ax, az, bx, bz, altura, isCerca, comodoId = null) { 
@@ -407,7 +415,6 @@ export function reconstruirTelhadoPiramide(telhado) {
     const w = telhado.largura; const d = telhado.profundidade; const h = telhado.alturaTelhado;
     const geo = new THREE.ConeGeometry(Math.SQRT2 / 2, 1, 4); geo.rotateY(Math.PI / 4);
     
-    // Fallback safe layer for textures
     const matBase = telhado.textura ? gerarMaterialPintura(telhado.textura, Math.max(1, w/configMapa.tamanhoGrid), Math.max(1, d/configMapa.tamanhoGrid)) : materialTelhadoPadrão.clone();
     const matBottom = new THREE.MeshBasicMaterial({ color: 0x000000, visible: false });
     const pyramid = new THREE.Mesh(geo, [matBase, matBottom]);
@@ -461,37 +468,11 @@ canvas?.addEventListener('dblclick', e => { const hit = raycastPlanoBase(e.clien
 
 canvas?.addEventListener('pointerdown', e => {
   if (e.button !== 0 && e.button !== 2) return;
-  if (estadoGlobal !== 'construcao') return; // BLOQUEIO DE ESTADO
+  if (estadoGlobal !== 'construcao') return;
 
   if (movendoSelecionado) { movendoSelecionado = false; pontoA = null; finalizarAcao(); limparSelecao(); showAviso("Posicionado!"); return; }
 
   const isRemocao = e.ctrlKey || e.metaKey || e.button === 2;
-
-  if (modoAtivo === 'telhado') {
-      if (isRemocao) {
-          const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
-          if (hitAll) executarMarreta(hitAll.object);
-          return;
-      }
-      const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
-      const chaoHit = raycastPlanoBase(e.clientX, e.clientY);
-      const clickPoint = hitAll ? hitAll.point : (chaoHit ? chaoHit.point : null);
-      if (clickPoint) {
-          let startX = snapCentroCelula(clickPoint.x); let startZ = snapCentroCelula(clickPoint.z);
-          const { celulas, fechada } = encontrarAreaFechada(startX, startZ);
-          if (fechada && celulas.length > 0 && celulas.length < 5000) {
-              let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-              const t = configMapa.tamanhoGrid;
-              celulas.forEach(c => { minX = Math.min(minX, c.x - t/2); maxX = Math.max(maxX, c.x + t/2); minZ = Math.min(minZ, c.z - t/2); maxZ = Math.max(maxZ, c.z + t/2); });
-              minX -= 0.25; maxX += 0.25; minZ -= 0.25; maxZ += 0.25; 
-              const cx = (minX + maxX)/2; const cz = (minZ + maxZ)/2;
-              const existe = telhadosConstruidos.find(t => t.nivel === configsCamera.nivel && Math.abs((t.ax+t.bx)/2 - cx) < 0.1 && Math.abs((t.az+t.bz)/2 - cz) < 0.1);
-              if(!existe) { iniciarAcao(); criarTelhado(minX, minZ, maxX, maxZ, 3.0); finalizarAcao(); showAviso("Telhado gerado! Selecione a Mãozinha para ajustar a altura."); } 
-              else { showAviso("Já existe um telhado nesta sala."); }
-          } else { showAviso("Clique dentro de um cômodo fechado para criar o telhado!"); }
-      }
-      return;
-  }
 
   if (!modoAtivo && !isRemocao && !e.altKey && !e.shiftKey) {
       if (grupoSetas.visible) {
