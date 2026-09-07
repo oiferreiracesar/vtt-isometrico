@@ -1,5 +1,5 @@
-// js/ui.js - Bibliotecas de Texturas com Fetch Automático (Case-Sensitive)
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, exportarMapa, importarMapa, limparMapa } from './construtor.js';
+// js/ui.js - Bibliotecas de Texturas com Cache de API (Anti-Crash)
+import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa, gridHelper } from './mapa.js';
 
@@ -17,9 +17,17 @@ export function showAviso(msg) {
   clearTimeout(avisoTimeout); avisoTimeout = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-export function mostrarGizmo(x, y) {
+export function mostrarGizmo(x, y, tipoObj = 'comodo') {
     const g = document.getElementById('room-gizmo');
-    if(g) { g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; }
+    if(g) { 
+        g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; 
+        const rotL = document.getElementById('gizmoRotLeft'); if(rotL) rotL.style.display = tipoObj === 'telhado' ? 'none' : 'block';
+        const rotR = document.getElementById('gizmoRotRight'); if(rotR) rotR.style.display = tipoObj === 'telhado' ? 'none' : 'block';
+        const wPlus = document.getElementById('gizmoWiden'); if(wPlus) wPlus.style.display = tipoObj === 'telhado' ? 'none' : 'block';
+        const wMin = document.getElementById('gizmoShrink'); if(wMin) wMin.style.display = tipoObj === 'telhado' ? 'none' : 'block';
+        const tPlus = document.getElementById('gizmoTaller'); if(tPlus) tPlus.style.display = tipoObj === 'comodo' ? 'none' : 'block';
+        const tMin = document.getElementById('gizmoShorter'); if(tMin) tMin.style.display = tipoObj === 'comodo' ? 'none' : 'block';
+    }
 }
 
 export function esconderGizmo() { const g = document.getElementById('room-gizmo'); if(g) g.style.display = 'none'; }
@@ -45,10 +53,9 @@ export function selecionarMaterialNaPaleta(matAlvo) {
   }
 
   if (match) { 
-      categoriaPaletaAtual = catMatch;
-      idPaletaSelecionada[catMatch] = match.id; 
+      categoriaPaletaAtual = catMatch; idPaletaSelecionada[catMatch] = match.id; 
       document.querySelectorAll('.paleta-tab').forEach(b => b.classList.toggle('ativo', b.getAttribute('data-cat') === catMatch));
-      renderizarPaleta(); showAviso("🎨 Pipeta: Textura copiada para o balde!"); 
+      renderizarPaleta(); showAviso("🎨 Pipeta: Material copiado!"); 
   } else { showAviso("Material não encontrado nas bibliotecas base."); }
 }
 
@@ -56,7 +63,7 @@ function renderizarPaleta() {
   const div = document.getElementById('paletaTexturas'); if (!div) return; div.innerHTML = '';
   const listaAtual = paletas[categoriaPaletaAtual];
 
-  if (!listaAtual.length) { div.innerHTML = '<span class="paletaVazia">Carregando texturas...</span>'; return; }
+  if (!listaAtual.length) { div.innerHTML = '<span class="paletaVazia">Carregando Nuvem...</span>'; return; }
   
   listaAtual.forEach(item => {
     const sw = document.createElement('div'); 
@@ -72,6 +79,7 @@ function renderizarPaleta() {
 }
 
 function carregarBancoDeAssets() {
+  // Cores Sólidas Garantidas
   paletas.pedra.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#94a3b8' }); idPaletaSelecionada.pedra = paletas.pedra[0].id;
   paletas.madeira.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#8a7550' }); idPaletaSelecionada.madeira = paletas.madeira[0].id;
   paletas.grama.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#4ade80' }); idPaletaSelecionada.grama = paletas.grama[0].id;
@@ -82,29 +90,62 @@ function carregarBancoDeAssets() {
 
   const githubUser = 'oiferreiracesar';
   const githubRepo = 'vtt-isometrico';
-  
   const mapeamentoPastas = [ { id: 'pedra', pasta: 'Pedra' }, { id: 'madeira', pasta: 'Madeira' }, { id: 'grama', pasta: 'Grama' }, { id: 'azulejo', pasta: 'Azulejo' }, { id: 'telha', pasta: 'Telha' } ];
 
-  mapeamentoPastas.forEach(item => {
-      fetch(`https://api.github.com/repos/${githubUser}/${githubRepo}/contents/assets/texturas/${item.pasta}`)
-          .then(response => { if (!response.ok) throw new Error('Limite da API atingido ou pasta vazia.'); return response.json(); })
-          .then(arquivos => {
-              arquivos.forEach(arquivo => {
-                  if (arquivo.type === 'file' && arquivo.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
-                      const url = `assets/texturas/${item.pasta}/${arquivo.name}`;
-                      loader.load(url, (tex) => { 
-                          tex.colorSpace = THREE.SRGBColorSpace; 
-                          paletas[item.id].push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
-                          if (categoriaPaletaAtual === item.id) renderizarPaleta(); 
-                      });
-                  }
+  function processarArquivosDaAPI(arquivos, item) {
+      arquivos.forEach(arquivo => {
+          if (arquivo.type === 'file' && arquivo.name.match(/\.(jpg|jpeg|png|webp|gif)$/i)) {
+              const url = `assets/texturas/${item.pasta}/${arquivo.name}`;
+              loader.load(url, (tex) => { 
+                  tex.colorSpace = THREE.SRGBColorSpace; 
+                  paletas[item.id].push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
+                  if (categoriaPaletaAtual === item.id) renderizarPaleta(); 
               });
-          }).catch(error => { console.warn(`Aviso de Leitura - Pasta [${item.pasta}]:`, error.message); });
+          }
+      });
+  }
+
+  mapeamentoPastas.forEach(item => {
+      const cacheKey = `vtt_tex_${item.pasta}`;
+      const cacheTimeKey = `vtt_tex_time_${item.pasta}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      const cacheTime = localStorage.getItem(cacheTimeKey);
+
+      // Se existir Cache e for de hoje (evita bloquear no limite da API)
+      if (cachedData && cacheTime && (Date.now() - cacheTime < 86400000)) {
+          processarArquivosDaAPI(JSON.parse(cachedData), item);
+      } else {
+          fetch(`https://api.github.com/repos/${githubUser}/${githubRepo}/contents/assets/texturas/${item.pasta}`)
+              .then(response => { if (!response.ok) throw new Error('Limite da API Atingido'); return response.json(); })
+              .then(arquivos => {
+                  localStorage.setItem(cacheKey, JSON.stringify(arquivos));
+                  localStorage.setItem(cacheTimeKey, Date.now());
+                  processarArquivosDaAPI(arquivos, item);
+              })
+              .catch(error => {
+                  console.warn(`Fallback do Cache ativado para [${item.pasta}] devido a bloqueio do GitHub.`);
+                  if (cachedData) processarArquivosDaAPI(JSON.parse(cachedData), item);
+              });
+      }
   });
 }
 
 export function iniciarUI() {
   carregarBancoDeAssets();
+
+  // Adiciona o Botão de Sincronização Dinamicamente
+  const paletaBotoes = document.getElementById('paletaBotoes');
+  if (paletaBotoes && !document.getElementById('btnSyncAPI')) {
+      const btnSync = document.createElement('button');
+      btnSync.id = 'btnSyncAPI'; btnSync.title = 'Sincronizar Nuvem (GitHub)'; btnSync.textContent = '🔄';
+      btnSync.style.cssText = "width: 100%; height: 100%; margin: 0; padding: 0; font-size: 16px; border-radius: 8px;";
+      btnSync.onclick = () => {
+          localStorage.clear();
+          showAviso('Cache limpo! Recarregando página para buscar texturas novas...');
+          setTimeout(() => location.reload(), 1500);
+      };
+      paletaBotoes.appendChild(btnSync);
+  }
 
   document.getElementById('btnAjuda')?.addEventListener('click', () => { const modal = document.getElementById('modalAjuda'); if (modal) modal.style.display = 'flex'; });
   document.getElementById('btnFecharAjuda')?.addEventListener('click', () => { const modal = document.getElementById('modalAjuda'); if (modal) modal.style.display = 'none'; });
@@ -115,8 +156,6 @@ export function iniciarUI() {
 
       if (e.key === 'F2') { e.preventDefault(); const btnConstrucao = document.querySelector('[data-target="panel-construcao"]'); if (btnConstrucao && !btnConstrucao.classList.contains('active')) btnConstrucao.click(); }
       if (e.key === 'Escape') { const modal = document.getElementById('modalAjuda'); if (modal && modal.style.display === 'flex') { modal.style.display = 'none'; } else { const btnMaozinha = document.getElementById('btnSairModo'); if (btnMaozinha) btnMaozinha.click(); } }
-      
-      // MAIOR COMPATIBILIDADE COM MAC AQUI:
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) refazer(); else desfazer(); }
       if (e.key.toLowerCase() === 'g' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) { if (gridHelper) gridHelper.visible = !gridHelper.visible; }
 
@@ -137,10 +176,8 @@ export function iniciarUI() {
 
   document.querySelectorAll('.paleta-tab').forEach(btn => {
       btn.addEventListener('click', (e) => {
-          document.querySelectorAll('.paleta-tab').forEach(b => b.classList.remove('ativo'));
-          e.target.classList.add('ativo');
-          categoriaPaletaAtual = e.target.getAttribute('data-cat');
-          renderizarPaleta();
+          document.querySelectorAll('.paleta-tab').forEach(b => b.classList.remove('ativo')); e.target.classList.add('ativo');
+          categoriaPaletaAtual = e.target.getAttribute('data-cat'); renderizarPaleta();
       });
   });
 
@@ -175,7 +212,6 @@ export function iniciarUI() {
           if(simsPanel) simsPanel.style.display = 'none'; ativarFerramenta('btnSairModo', null, null); 
       } else { 
           btn.classList.add('active'); const target = document.getElementById(targetId); if (target) target.classList.add('active'); if(simsPanel) simsPanel.style.display = 'flex'; 
-
           if (targetId === 'panel-construcao') { estadoGlobal = 'construcao'; if (playActionBar) playActionBar.style.display = 'none'; showAviso("🏗️ Modo Construção: Geometria Destravada"); } 
           else if (targetId === 'panel-tabuleiro') { estadoGlobal = 'tabuleiro'; if (playActionBar) playActionBar.style.display = 'flex'; resetarEstadoConstrucao(); showAviso("♟️ Modo Tabuleiro: Geometria Trancada."); } 
           else { estadoGlobal = targetId.split('-')[1]; if (playActionBar) playActionBar.style.display = 'none'; resetarEstadoConstrucao(); }
@@ -195,6 +231,8 @@ export function iniciarUI() {
   document.getElementById('gizmoDelete')?.addEventListener('click', deletarSelecionado);
   document.getElementById('gizmoWiden')?.addEventListener('click', () => alterarDimensaoGizmo(1));
   document.getElementById('gizmoShrink')?.addEventListener('click', () => alterarDimensaoGizmo(-1));
+  document.getElementById('gizmoTaller')?.addEventListener('click', () => alterarAlturaGizmo(1));
+  document.getElementById('gizmoShorter')?.addEventListener('click', () => alterarAlturaGizmo(-1));
 
   document.getElementById('btnModoParede')?.addEventListener('click', () => ativarFerramenta('btnModoParede', 'parede', 'Parede: Clique e arraste.'));
   document.getElementById('btnModoCerca')?.addEventListener('click', () => ativarFerramenta('btnModoCerca', 'cerca', 'Cerca: Delimita áreas sem telhado.'));
@@ -206,10 +244,8 @@ export function iniciarUI() {
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
-  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Clique dentro de um cômodo fechado para gerar a cobertura.'));
+  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Clique dentro da sala para gerar a cobertura.'));
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Livre.'));
-
-  const botoesFuturos = ['btnModoTerreno']; botoesFuturos.forEach(id => { document.getElementById(id)?.addEventListener('click', () => showAviso("Em breve!")); });
 
   document.getElementById('btnRedimensionarMapa')?.addEventListener('click', () => { const w = parseInt(document.getElementById('inputMapaX').value) || 32, d = parseInt(document.getElementById('inputMapaZ').value) || 18; redimensionarMapa(w, d); showAviso(`Tabuleiro redimensionado para ${w}x${d}.`); });
 
@@ -226,4 +262,6 @@ export function iniciarUI() {
   btnWallFull?.addEventListener('click', () => { clearWallActive(); btnWallFull.classList.add('ativo'); atualizarVisibilidadeAndares('full'); });
   btnWallCut?.addEventListener('click', () => { clearWallActive(); btnWallCut.classList.add('ativo'); atualizarVisibilidadeAndares('cut'); });
   btnWallLow?.addEventListener('click', () => { clearWallActive(); btnWallLow.classList.add('ativo'); atualizarVisibilidadeAndares('low'); });
+
+  document.getElementById('camRoofToggle')?.addEventListener('click', (e) => { e.currentTarget.classList.toggle('ativo'); toggleTelhadosGlobais(e.currentTarget.classList.contains('ativo')); });
 }
