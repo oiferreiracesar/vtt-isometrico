@@ -1,4 +1,4 @@
-// js/construtor.js - Motor Completo: Geometry Lock e Auto-Roof
+// js/construtor.js - Motor Completo: Importação Segura e Estado Global
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta, estadoGlobal } from './ui.js';
@@ -123,18 +123,30 @@ function aplicarMateriaisImportados(mesh, matDataArray, objectType) {
     if (!matDataArray || matDataArray.length === 0 || !mesh) return;
     const materiais = matDataArray.map(data => {
         if (!data) return new THREE.MeshLambertMaterial({ color: '#ffffff' });
-        if (data.tipo === 'imagem' && data.dataUrl) { let tex = cacheTexturas[data.dataUrl]; if (!tex) { tex = new THREE.TextureLoader().load(data.dataUrl); tex.colorSpace = THREE.SRGBColorSpace; cacheTexturas[data.dataUrl] = tex; } const cloneTex = tex.clone(); cloneTex.needsUpdate = true; cloneTex.wrapS = cloneTex.wrapT = THREE.RepeatWrapping; return new THREE.MeshLambertMaterial({ map: cloneTex, color: 0xffffff }); } else { return new THREE.MeshLambertMaterial({ color: data.cor || '#ffffff' }); }
+        if (data.tipo === 'imagem' && data.dataUrl) {
+            let tex = cacheTexturas[data.dataUrl];
+            if (!tex) { tex = new THREE.TextureLoader().load(data.dataUrl); tex.colorSpace = THREE.SRGBColorSpace; cacheTexturas[data.dataUrl] = tex; }
+            const cloneTex = tex.clone(); cloneTex.needsUpdate = true; cloneTex.wrapS = cloneTex.wrapT = THREE.RepeatWrapping;
+            return new THREE.MeshLambertMaterial({ map: cloneTex, color: 0xffffff });
+        } else { return new THREE.MeshLambertMaterial({ color: data.cor || '#ffffff' }); }
     });
 
     const groupsLen = mesh.geometry && mesh.geometry.groups && mesh.geometry.groups.length > 0 ? mesh.geometry.groups.length : 1;
-    if (groupsLen > 1) { const padded = []; const baseMat = materiais[0] || new THREE.MeshLambertMaterial({ color: '#ffffff' }); for(let i = 0; i < groupsLen; i++) padded.push(materiais[i] || baseMat.clone()); mesh.material = padded; } else { mesh.material = materiais[0]; }
+    if (groupsLen > 1) {
+        const padded = []; const baseMat = materiais[0] || new THREE.MeshLambertMaterial({ color: '#ffffff' });
+        for(let i = 0; i < groupsLen; i++) padded.push(materiais[i] || baseMat.clone());
+        mesh.material = padded;
+    } else { mesh.material = materiais[0]; }
 
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     mats.forEach((mat, faceIndex) => {
         if (mat && mat.map && mesh.geometry) {
             let repeatX = 1, repeatY = 1;
             if (objectType === 'piso' || objectType === 'escada' || objectType === 'telhado') { repeatX = configMapa.tamanhoGrid; repeatY = configMapa.tamanhoGrid; } 
-            else if (mesh.geometry.parameters) { const { width, height, depth } = mesh.geometry.parameters; if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; } }
+            else if (mesh.geometry.parameters) {
+                const { width, height, depth } = mesh.geometry.parameters;
+                if (faceIndex === 0 || faceIndex === 1) { repeatX = depth; repeatY = height; } else if (faceIndex === 2 || faceIndex === 3) { repeatX = width; repeatY = depth; } else if (faceIndex === 4 || faceIndex === 5) { repeatX = width; repeatY = height; }
+            }
             mat.map.repeat.set(repeatX, repeatY); mat.needsUpdate = true;
         }
     });
@@ -250,7 +262,7 @@ function raycastObjetosDoNivel(clientX, clientY) {
     const pisosF = pisosConstruidos.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh); 
     const colunasF = colunasSustentacao.filter(p => p.nivel === configsCamera.nivel).map(p => p.mesh); 
     const escadasF = []; escadasConstruidas.forEach(e => { if (e.nivel === configsCamera.nivel) escadasF.push(...e.mesh.children); }); 
-    const telhadosF = []; telhadosConstruidos.forEach(t => { if (t.nivel === configsCamera.nivel) telhadosF.push(...t.mesh.children); });
+    const telhadosF = []; telhadosConstruidos.forEach(t => { if (t.nivel === configsCamera.nivel) telhadosF.push(t.mesh); });
     
     const objetosNivel = [...paredesF, ...pilaresF, ...pisosF, ...colunasF, ...escadasF, ...telhadosF]; 
     if (configsCamera.nivel === 0 && meshChaoBase) objetosNivel.push(meshChaoBase); 
@@ -259,10 +271,6 @@ function raycastObjetosDoNivel(clientX, clientY) {
     objetosNivel.forEach(obj => { if (obj && Array.isArray(obj.material)) { for (let i = 0; i < obj.material.length; i++) { if (!obj.material[i]) obj.material[i] = materialParede.clone(); } } });
     const hits = raycaster.intersectObjects(objetosNivel, true); 
     return hits.length ? hits[0] : null; 
-}
-
-export function resetarEstadoConstrucao() {
-    setModoAtivo(null);
 }
 
 export function setModoAtivo(modo) { modoAtivo = modo; arrastandoConstrucao = false; pontoA = null; limparSelecao(); previaMesh.visible = false; previaEscadaInicio.visible = false; previaEscadaFim.visible = false; cursor3D.visible = false; const divMedida = document.getElementById('cursor-medida'); if(divMedida) divMedida.style.display = 'none'; }
@@ -306,6 +314,37 @@ export function deletarSelecionado() { iniciarAcao(); if (comodoSelecionado) { c
 function atualizarGeometriaParede(parede) { const dx = parede.bx - parede.ax, dz = parede.bz - parede.az; const compTotal = Math.hypot(dx, dz); const compParede = Math.max(0.001, compTotal - 0.25); const alturaBase = parede.nivel * obterAltura(); parede.mesh.position.set((parede.ax + parede.bx)/2, alturaBase + parede.altura/2, (parede.az + parede.bz)/2); parede.mesh.rotation.y = Math.atan2(dx, dz); if (parede.mesh.geometry) parede.mesh.geometry.dispose(); parede.mesh.geometry = new THREE.BoxGeometry(0.25, parede.altura, compParede); }
 function atualizarGeometriaPilar(pilar) { const alturaBase = pilar.nivel * obterAltura(); pilar.mesh.position.set(pilar.x, alturaBase + pilar.altura/2, pilar.z); }
 function obterOuCriarPilar(x, z, altura, isCerca, comodoId = null) { let pilar = pilaresConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01 && p.nivel === configsCamera.nivel && p.comodoId === comodoId); if (!pilar) { const mat = isCerca ? materialCerca : materialParede; const materiais = [mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone()]; const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, 0.25), materiais); const alturaBase = configsCamera.nivel * obterAltura(); mesh.position.set(x, alturaBase + altura / 2, z); scene.add(mesh); pilar = { mesh, x, z, altura, nivel: configsCamera.nivel, comodoId }; pilaresConstruidos.push(pilar); registrarAdicao('pilar', pilar, pilaresConstruidos); if (comodoId) { const c = comodosConstruidos.find(com => com.id === comodoId); if (c) c.pilares.push(pilar); } } return pilar; }
+
+function verificarSalasFechadas(px, pz, pontoA) {
+    const pontosTeste = [];
+    if (['retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) {
+        pontosTeste.push({ x: (pontoA.x + px)/2, z: (pontoA.z + pz)/2 });
+    } else if (modoAtivo === 'parede') {
+        const cx = (pontoA.x + px)/2, cz = (pontoA.z + pz)/2;
+        const angle = Math.atan2(px - pontoA.x, pz - pontoA.z);
+        const nx = Math.cos(angle) * configMapa.tamanhoGrid;
+        const nz = -Math.sin(angle) * configMapa.tamanhoGrid;
+        pontosTeste.push({ x: cx + nx, z: cz + nz });
+        pontosTeste.push({ x: cx - nx, z: cz - nz });
+    }
+
+    pontosTeste.forEach(pt => {
+        const startX = snapCentroCelula(pt.x), startZ = snapCentroCelula(pt.z);
+        const area = encontrarAreaFechada(startX, startZ);
+        if (area.fechada && area.celulas.length > 0) {
+            let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+            const t = configMapa.tamanhoGrid;
+            area.celulas.forEach(c => { minX = Math.min(minX, c.x - t/2); maxX = Math.max(maxX, c.x + t/2); minZ = Math.min(minZ, c.z - t/2); maxZ = Math.max(maxZ, c.z + t/2); });
+            minX -= 0.25; maxX += 0.25; minZ -= 0.25; maxZ += 0.25;
+            const cx = (minX + maxX)/2, cz = (minZ + maxZ)/2;
+            const existe = telhadosConstruidos.find(t => t.nivel === configsCamera.nivel && Math.abs((t.ax+t.bx)/2 - cx) < 0.1 && Math.abs((t.az+t.bz)/2 - cz) < 0.1);
+            if (!existe) {
+                criarTelhado(minX, minZ, maxX, maxZ, 3.0);
+                showAviso("🏠 Cômodo fechado detectado! Telhado gerado automaticamente.");
+            }
+        }
+    });
+}
 
 function criarSegmentoParede(ax, az, bx, bz, altura, isCerca, comodoId = null) { 
   const existe = paredesConstruidas.find(p => p.nivel === configsCamera.nivel && ((Math.abs(p.ax - ax) < 0.01 && Math.abs(p.az - az) < 0.01 && Math.abs(p.bx - bx) < 0.01 && Math.abs(p.bz - bz) < 0.01) || (Math.abs(p.ax - bx) < 0.01 && Math.abs(p.az - bz) < 0.01 && Math.abs(p.bx - ax) < 0.01 && Math.abs(p.bz - az) < 0.01))); 
@@ -395,11 +434,32 @@ canvas?.addEventListener('dblclick', e => { const hit = raycastPlanoBase(e.clien
 
 canvas?.addEventListener('pointerdown', e => {
   if (e.button !== 0 && !(e.button === 2 && e.ctrlKey)) return;
-  
-  // BLOQUEIO DE ESTADO: Se não estiver no modo construção, o mouse ignora a geometria!
-  if (estadoGlobal !== 'construcao') return;
+  if (estadoGlobal !== 'construcao') return; // BLOQUEIO DE ESTADO FÍSICO
 
   if (movendoSelecionado) { movendoSelecionado = false; pontoA = null; finalizarAcao(); limparSelecao(); showAviso("Posicionado!"); return; }
+
+  if (modoAtivo === 'telhado') {
+      const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
+      const chaoHit = raycastPlanoBase(e.clientX, e.clientY);
+      const clickPoint = hitAll ? hitAll.point : (chaoHit ? chaoHit.point : null);
+      if (clickPoint) {
+          let startX = snapCentroCelula(clickPoint.x); 
+          let startZ = snapCentroCelula(clickPoint.z);
+          const { celulas } = encontrarAreaFechada(startX, startZ);
+          
+          if (celulas.length > 0 && celulas.length < 5000) {
+              let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+              const t = configMapa.tamanhoGrid;
+              celulas.forEach(c => { minX = Math.min(minX, c.x - t/2); maxX = Math.max(maxX, c.x + t/2); minZ = Math.min(minZ, c.z - t/2); maxZ = Math.max(maxZ, c.z + t/2); });
+              minX -= 0.25; maxX += 0.25; minZ -= 0.25; maxZ += 0.25; 
+              const cx = (minX + maxX)/2; const cz = (minZ + maxZ)/2;
+              const existe = telhadosConstruidos.find(t => t.nivel === configsCamera.nivel && Math.abs((t.ax+t.bx)/2 - cx) < 0.1 && Math.abs((t.az+t.bz)/2 - cz) < 0.1);
+              if(!existe) { iniciarAcao(); criarTelhado(minX, minZ, maxX, maxZ, 3.0); finalizarAcao(); showAviso("Telhado gerado! Selecione a Mãozinha para ajustar a altura."); } 
+              else { showAviso("Já existe um telhado nesta sala."); }
+          } else { showAviso("Clique dentro de um cômodo fechado para criar o telhado!"); }
+      }
+      return;
+  }
 
   if (!modoAtivo && e.button === 0 && !e.altKey && !e.ctrlKey && !e.shiftKey) {
       if (grupoSetas.visible) {
@@ -506,6 +566,11 @@ function pintarFacePorNormalMundial(mesh, targetNormal, item) {
 function removerMaterialNaFace(mesh, faceIndex, matBase) { 
     registrarPintura(mesh); const novosMateriais = getSafeMaterialArray(mesh); const groupsLen = mesh.geometry.groups && mesh.geometry.groups.length > 0 ? mesh.geometry.groups.length : 6; const safeFaceIndex = (faceIndex !== undefined && faceIndex < groupsLen) ? faceIndex : 0;
     novosMateriais[safeFaceIndex] = matBase.clone(); mesh.material = novosMateriais; finalizarPintura(mesh); 
+}
+
+function removerPinturaFacePorNormal(mesh, targetNormal, matBase) { 
+    const tNorm = targetNormal.clone().normalize(); const localNormals = [new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,-1,0), new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)]; 
+    for (let i = 0; i < 6; i++) { const worldNormal = localNormals[i].clone().applyQuaternion(mesh.quaternion).normalize(); if (worldNormal.dot(tNorm) > 0.5) removerMaterialNaFace(mesh, i, matBase); } 
 }
 
 canvas?.addEventListener('pointermove', e => {
