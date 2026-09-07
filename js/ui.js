@@ -1,4 +1,4 @@
-// js/ui.js - Gerenciamento da Interface HTML
+// js/ui.js
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa } from './mapa.js';
@@ -19,8 +19,8 @@ export function mostrarGizmo(x, y, tipoObj = 'comodo') {
     const g = document.getElementById('room-gizmo');
     if(g) { 
         g.style.display = 'flex'; g.style.left = (x - 120) + 'px'; g.style.top = (y - 70) + 'px'; 
-        const rotL = document.getElementById('gizmoRotLeft'); if(rotL) rotL.style.display = 'block';
-        const rotR = document.getElementById('gizmoRotRight'); if(rotR) rotR.style.display = 'block';
+        const rotL = document.getElementById('gizmoRotLeft'); if(rotL) rotL.style.display = tipoObj === 'telhado' ? 'none' : 'block';
+        const rotR = document.getElementById('gizmoRotRight'); if(rotR) rotR.style.display = tipoObj === 'telhado' ? 'none' : 'block';
         const wPlus = document.getElementById('gizmoWiden'); if(wPlus) wPlus.style.display = tipoObj === 'telhado' ? 'none' : 'block';
         const wMin = document.getElementById('gizmoShrink'); if(wMin) wMin.style.display = tipoObj === 'telhado' ? 'none' : 'block';
         const tPlus = document.getElementById('gizmoTaller'); if(tPlus) tPlus.style.display = tipoObj === 'comodo' ? 'none' : 'block';
@@ -105,6 +105,7 @@ export function iniciarUI() {
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
+  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Clique dentro de um cômodo fechado para gerar a cobertura.'));
   
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Clique numa sala, escada ou telhado para ver opções.'));
 
