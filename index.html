@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <title>Masmorra Isométrica - VTT</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Estilos das novas Abas da Paleta */
+    .paleta-tab { flex: 1; padding: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; cursor: pointer; border-radius: 4px; font-size: 11px; text-transform: uppercase; font-weight: bold; transition: all 0.2s; min-width: 60px; text-align: center; }
+    .paleta-tab:hover { background: rgba(255,255,255,0.1); }
+    .paleta-tab.ativo { background: rgba(56,189,248,0.2); color: #38bdf8; border-color: #38bdf8; }
+  </style>
   <script>
     window.addEventListener('error', function(e) {
       alert('🚨 ERRO FATAL DETECTADO:\n\n' + e.message + '\n\nArquivo: ' + e.filename + '\nLinha: ' + e.lineno);
@@ -98,20 +104,31 @@
           <button class="tool-btn" id="btnModoEscada" title="Escada Subindo (Arraste)">🪜</button>
           <button class="tool-btn" id="btnModoEscadaBaixo" title="Escada Descendo (Arraste)">🕳️</button>
           <button class="tool-btn" id="btnModoColuna" title="Coluna de Sustentação">🏛️</button>
+          <button class="tool-btn" id="btnModoTelhado" title="Telhados">🏠</button>
+          <button class="tool-btn" id="btnModoTerreno" title="Paisagismo (Em breve)" style="opacity: 0.5;">🌳</button>
         </div>
         
-        <!-- CAMPO DE ALTURA RESTAURADO -->
         <div class="divider"></div>
         <div class="tool-group small-inputs">
           <div class="campoSims">Pé-Direito <input type="number" id="inputAlturaParede" value="3" min="1" max="15" step="0.5"></div>
         </div>
         
         <div class="divider"></div>
+        
+        <!-- NOVA ESTRUTURA COM AS SUAS 5 CATEGORIAS -->
         <div id="paletaSecao">
+          <div id="paletaTabs" style="display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap;">
+            <button class="paleta-tab ativo" data-cat="pedra">Pedra</button>
+            <button class="paleta-tab" data-cat="madeira">Madeira</button>
+            <button class="paleta-tab" data-cat="grama">Grama</button>
+            <button class="paleta-tab" data-cat="azulejo">Azulejo</button>
+            <button class="paleta-tab" data-cat="telha">Telha</button>
+          </div>
+
           <div id="paletaBotoes">
-            <button id="btnAdicionarTextura" title="Subir Imagem">🖼️</button>
+            <button id="btnAdicionarTextura" title="Subir Imagem Local">🖼️</button>
             <input type="file" id="inputAdicionarTextura" accept="image/*" multiple style="display: none;">
-            <input type="color" id="inputCorNova" value="#38bdf8" title="Nova Cor">
+            <input type="color" id="inputCorNova" value="#38bdf8" title="Nova Cor Sólida">
             <button id="btnAdicionarCor" title="Adicionar Cor">➕</button>
           </div>
           <div id="paletaTexturasWrap"><div id="paletaTexturas"></div></div>

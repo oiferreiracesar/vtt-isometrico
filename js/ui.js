@@ -1,4 +1,4 @@
-// js/ui.js - Cérebro da Máquina de Estados e Mapeamento The Sims 1
+// js/ui.js - Bibliotecas de Texturas e Manifesto
 import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa, gridHelper } from './mapa.js';
@@ -32,35 +32,123 @@ export function mostrarGizmo(x, y, tipoObj = 'comodo') {
 
 export function esconderGizmo() { const g = document.getElementById('room-gizmo'); if(g) g.style.display = 'none'; }
 
-export let paleta = []; export let idPaletaSelecionada = null; let proximoIdPaleta = 1;
+// ESTRUTURA DE BIBLIOTECAS
+export let paletas = { parede: [], chao: [], telhado: [] };
+export let idPaletaSelecionada = { parede: null, chao: null, telhado: null };
+export let categoriaPaletaAtual = 'parede'; 
+let proximoIdPaleta = 1;
 
-export function itemSelecionadoAtual() { return paleta.find(p => p.id === idPaletaSelecionada) || null; }
+export function itemSelecionadoAtual() { 
+    const id = idPaletaSelecionada[categoriaPaletaAtual];
+    return paletas[categoriaPaletaAtual].find(p => p.id === id) || null; 
+}
 
 export function selecionarMaterialNaPaleta(matAlvo) {
-  if (!matAlvo) return; let match = null;
-  if (matAlvo.map) match = paleta.find(p => p.tipo === 'imagem' && p.textura && p.textura.uuid === matAlvo.map.uuid);
-  else if (matAlvo.color) match = paleta.find(p => p.tipo === 'cor' && p.cor.toLowerCase() === ('#' + matAlvo.color.getHexString()).toLowerCase());
-  if (match) { idPaletaSelecionada = match.id; renderizarPaleta(); showAviso("🎨 Pipeta: Textura copiada!"); } 
-  else showAviso("Material não encontrado na paleta base.");
+  if (!matAlvo) return; 
+  let match = null;
+  let catMatch = null;
+
+  for (const cat of ['parede', 'chao', 'telhado']) {
+      if (matAlvo.map) match = paletas[cat].find(p => p.tipo === 'imagem' && p.textura && p.textura.uuid === matAlvo.map.uuid);
+      else if (matAlvo.color) match = paletas[cat].find(p => p.tipo === 'cor' && p.cor.toLowerCase() === ('#' + matAlvo.color.getHexString()).toLowerCase());
+      if (match) { catMatch = cat; break; }
+  }
+
+  if (match) { 
+      categoriaPaletaAtual = catMatch;
+      idPaletaSelecionada[catMatch] = match.id; 
+      document.querySelectorAll('.paleta-tab').forEach(b => b.classList.toggle('ativo', b.getAttribute('data-cat') === catMatch));
+      renderizarPaleta(); 
+      showAviso("🎨 Pipeta: Material copiado e aba alterada!"); 
+  } else {
+      showAviso("Material não encontrado nas bibliotecas base.");
+  }
 }
 
 function renderizarPaleta() {
   const div = document.getElementById('paletaTexturas'); if (!div) return; div.innerHTML = '';
-  if (!paleta.length) { div.innerHTML = '<span class="paletaVazia">Carregando Banco...</span>'; return; }
-  paleta.forEach(item => {
-    const sw = document.createElement('div'); sw.className = 'swatchTextura' + (item.id === idPaletaSelecionada ? ' selecionada' : '');
-    sw.title = item.tipo === 'cor' ? `Tinta` : `Textura`;
-    if (item.tipo === 'cor') { sw.style.backgroundImage = 'none'; sw.style.backgroundColor = item.cor; } else { sw.style.backgroundImage = `url(${item.dataUrl})`; }
-    sw.onclick = () => { idPaletaSelecionada = item.id; renderizarPaleta(); }; div.appendChild(sw);
+  const listaAtual = paletas[categoriaPaletaAtual];
+
+  if (!listaAtual.length) { div.innerHTML = '<span class="paletaVazia">Pasta Vazia...</span>'; return; }
+  
+  listaAtual.forEach(item => {
+    const sw = document.createElement('div'); 
+    sw.className = 'swatchTextura' + (item.id === idPaletaSelecionada[categoriaPaletaAtual] ? ' selecionada' : '');
+    sw.title = item.tipo === 'cor' ? `Tinta Sólida` : `Textura Local`;
+    
+    if (item.tipo === 'cor') { sw.style.backgroundImage = 'none'; sw.style.backgroundColor = item.cor; } 
+    else { sw.style.backgroundImage = `url(${item.dataUrl})`; }
+    
+    sw.onclick = () => { idPaletaSelecionada[categoriaPaletaAtual] = item.id; renderizarPaleta(); }; 
+    div.appendChild(sw);
   });
 }
 
 function carregarBancoDeAssets() {
-  const coresIniciais = ['#e2e8f0', '#334155', '#4ade80']; 
-  coresIniciais.forEach(cor => { const id = proximoIdPaleta++; paleta.push({ id, tipo: 'cor', cor }); if (idPaletaSelecionada === null) idPaletaSelecionada = id; });
-  const loader = new THREE.TextureLoader(); loader.setCrossOrigin('Anonymous'); 
-  const texturasIniciais = ['https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/brick_diffuse.jpg', 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/hardwood2_diffuse.jpg', 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/terrain/grasslight-big.jpg'];
-  texturasIniciais.forEach(url => { loader.load(url, (textura) => { textura.colorSpace = THREE.SRGBColorSpace; const id = proximoIdPaleta++; paleta.push({ id, tipo: 'imagem', dataUrl: url, textura }); renderizarPaleta(); }); });
+  // Cores Sólidas Base (Garantia de segurança)
+  paletas.parede.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#e2e8f0' });
+  paletas.parede.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#334155' });
+  idPaletaSelecionada.parede = paletas.parede[0].id;
+
+  paletas.chao.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#8a7550' });
+  idPaletaSelecionada.chao = paletas.chao[0].id;
+
+  paletas.telhado.push({ id: proximoIdPaleta++, tipo: 'cor', cor: '#5c2b29' });
+  idPaletaSelecionada.telhado = paletas.telhado[0].id;
+
+  const loader = new THREE.TextureLoader(); 
+  loader.setCrossOrigin('Anonymous'); 
+
+  // ==========================================
+  // O SEU "MANIFESTO" DE TEXTURAS (Altere os nomes aqui!)
+  // ==========================================
+  
+  const texturasParedes = [
+      'pedra/minha_parede_1.jpg',
+      'madeira/parede_cabana.png'
+  ];
+
+  const texturasChao = [
+      'madeira/piso_tabuas.jpg',
+      'grama/grama_verde.jpg',
+      'azulejo/chao_pedra.png'
+  ];
+
+  const texturasTelhados = [
+      'telha/telhado_vermelho.jpg'
+  ];
+
+  // ==========================================
+  // MOTOR DE CARREGAMENTO AUTOMÁTICO
+  // ==========================================
+
+  texturasParedes.forEach(caminho => {
+      const url = `assets/texturas/${caminho}`;
+      loader.load(url, (tex) => { 
+          tex.colorSpace = THREE.SRGBColorSpace; 
+          paletas.parede.push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
+          renderizarPaleta(); 
+      });
+  });
+
+  texturasChao.forEach(caminho => {
+      const url = `assets/texturas/${caminho}`;
+      loader.load(url, (tex) => { 
+          tex.colorSpace = THREE.SRGBColorSpace; 
+          paletas.chao.push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
+          renderizarPaleta(); 
+      });
+  });
+
+  texturasTelhados.forEach(caminho => {
+      const url = `assets/texturas/${caminho}`;
+      loader.load(url, (tex) => { 
+          tex.colorSpace = THREE.SRGBColorSpace; 
+          paletas.telhado.push({ id: proximoIdPaleta++, tipo: 'imagem', dataUrl: url, textura: tex }); 
+          renderizarPaleta(); 
+      });
+  });
+
   renderizarPaleta();
 }
 
@@ -70,82 +158,79 @@ export function iniciarUI() {
   document.getElementById('btnAjuda')?.addEventListener('click', () => { const modal = document.getElementById('modalAjuda'); if (modal) modal.style.display = 'flex'; });
   document.getElementById('btnFecharAjuda')?.addEventListener('click', () => { const modal = document.getElementById('modalAjuda'); if (modal) modal.style.display = 'none'; });
   
-  // --- ATALHOS: THE SIMS 1 BUILD MODE ---
   window.addEventListener('keydown', e => { 
-      // PROTEÇÃO DE INPUT: Evita disparar atalhos enquanto digita números/textos
       const tag = e.target.tagName.toLowerCase();
       if (tag === 'input' || tag === 'textarea') return;
 
-      // F2: Build Mode
       if (e.key === 'F2') {
           e.preventDefault();
           const btnConstrucao = document.querySelector('[data-target="panel-construcao"]');
           if (btnConstrucao && !btnConstrucao.classList.contains('active')) btnConstrucao.click();
       }
 
-      // Esc: Cancelar ferramenta e voltar para mãozinha
       if (e.key === 'Escape') { 
           const modal = document.getElementById('modalAjuda'); 
           if (modal && modal.style.display === 'flex') { modal.style.display = 'none'; } 
           else { const btnMaozinha = document.getElementById('btnSairModo'); if (btnMaozinha) btnMaozinha.click(); } 
       }
       
-      // Ctrl + Z / Shift + Ctrl + Z (Desfazer / Refazer)
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-          e.preventDefault();
-          if (e.shiftKey) refazer(); else desfazer();
-      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) refazer(); else desfazer(); }
+      if (e.key.toLowerCase() === 'g' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) { if (gridHelper) gridHelper.visible = !gridHelper.visible; }
 
-      // Tecla G: Ocultar Grade
-      if (e.key.toLowerCase() === 'g' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-          if (gridHelper) gridHelper.visible = !gridHelper.visible;
-      }
-
-      // M: Mover objeto selecionado
       if (e.key.toLowerCase() === 'm' && estadoGlobal === 'construcao') { iniciarArrasteSelecionado(); }
-
-      // R: Rotacionar objeto selecionado
       if (e.key.toLowerCase() === 'r' && estadoGlobal === 'construcao') { girarSelecionado('dir'); }
-
-      // Delete / Backspace: Apagar objeto selecionado
       if ((e.key === 'Delete' || e.key === 'Backspace') && estadoGlobal === 'construcao') { deletarSelecionado(); }
 
-      // Page Up: Subir Andar
       if (e.key === 'PageUp') { document.getElementById('camUp')?.click(); }
-
-      // Page Down: Descer Andar
       if (e.key === 'PageDown') { document.getElementById('camDown')?.click(); }
 
-      // Home: Cycle Paredes (Full -> Cut -> Low -> Full)
       if (e.key === 'Home') {
-          const btnFull = document.getElementById('camWallFull');
-          const btnCut = document.getElementById('camWallCut');
-          const btnLow = document.getElementById('camWallLow');
-          
-          if (btnFull.classList.contains('ativo')) { btnCut.click(); }
-          else if (btnCut.classList.contains('ativo')) { btnLow.click(); }
-          else { btnFull.click(); }
+          const btnFull = document.getElementById('camWallFull'); const btnCut = document.getElementById('camWallCut'); const btnLow = document.getElementById('camWallLow');
+          if (btnFull.classList.contains('ativo')) { btnCut.click(); } else if (btnCut.classList.contains('ativo')) { btnLow.click(); } else { btnFull.click(); }
       }
 
-      // End: Ocultar Tudo (Paredes Low + Telhado Desligado)
       if (e.key === 'End') {
           document.getElementById('camWallLow')?.click();
           const btnRoof = document.getElementById('camRoofToggle');
           if (btnRoof && btnRoof.classList.contains('ativo')) btnRoof.click(); 
       }
 
-      // Vírgula e Ponto: Girar Câmera
       if (e.key === ',') { document.getElementById('camRotLeft')?.click(); }
       if (e.key === '.') { document.getElementById('camRotRight')?.click(); }
-
-      // Z / X ou + / - : Zoom In e Zoom Out
       if (e.key.toLowerCase() === 'z' || e.key === '+') { document.getElementById('camZoomIn')?.click(); }
       if (e.key.toLowerCase() === 'x' || e.key === '-') { document.getElementById('camZoomOut')?.click(); }
   });
 
+  // LOGICA DAS ABAS DE CATEGORIA
+  document.querySelectorAll('.paleta-tab').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+          document.querySelectorAll('.paleta-tab').forEach(b => b.classList.remove('ativo'));
+          e.target.classList.add('ativo');
+          categoriaPaletaAtual = e.target.getAttribute('data-cat');
+          renderizarPaleta();
+      });
+  });
+
   document.getElementById('btnAdicionarTextura')?.addEventListener('click', () => document.getElementById('inputAdicionarTextura').click());
-  document.getElementById('inputAdicionarTextura')?.addEventListener('change', e => { Array.from(e.target.files || []).forEach(arquivo => { const leitor = new FileReader(); leitor.onload = ev => { const dataUrl = ev.target.result; const textura = new THREE.TextureLoader().load(dataUrl); textura.colorSpace = THREE.SRGBColorSpace; const id = proximoIdPaleta++; paleta.push({ id, tipo: 'imagem', dataUrl, textura }); if (idPaletaSelecionada === null) idPaletaSelecionada = id; renderizarPaleta(); showAviso(`Material adicionado.`); }; leitor.readAsDataURL(arquivo); }); });
-  document.getElementById('btnAdicionarCor')?.addEventListener('click', () => { const cor = document.getElementById('inputCorNova').value; const id = proximoIdPaleta++; paleta.push({ id, tipo: 'cor', cor }); if (idPaletaSelecionada === null) idPaletaSelecionada = id; renderizarPaleta(); showAviso(`Cor adicionada.`); });
+  document.getElementById('inputAdicionarTextura')?.addEventListener('change', e => { 
+      Array.from(e.target.files || []).forEach(arquivo => { 
+          const leitor = new FileReader(); leitor.onload = ev => { 
+              const dataUrl = ev.target.result; const textura = new THREE.TextureLoader().load(dataUrl); textura.colorSpace = THREE.SRGBColorSpace; 
+              const id = proximoIdPaleta++; 
+              paletas[categoriaPaletaAtual].push({ id, tipo: 'imagem', dataUrl, textura }); 
+              idPaletaSelecionada[categoriaPaletaAtual] = id; 
+              renderizarPaleta(); showAviso(`Material adicionado na pasta: ${categoriaPaletaAtual.toUpperCase()}.`); 
+          }; 
+          leitor.readAsDataURL(arquivo); 
+      }); 
+  });
+  
+  document.getElementById('btnAdicionarCor')?.addEventListener('click', () => { 
+      const cor = document.getElementById('inputCorNova').value; const id = proximoIdPaleta++; 
+      paletas[categoriaPaletaAtual].push({ id, tipo: 'cor', cor }); 
+      idPaletaSelecionada[categoriaPaletaAtual] = id; 
+      renderizarPaleta(); showAviso(`Cor adicionada na pasta: ${categoriaPaletaAtual.toUpperCase()}.`); 
+  });
 
   function ativarFerramenta(botaoId, modo, msg) { document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('ativo')); const btn = document.getElementById(botaoId); if(btn) btn.classList.add('ativo'); setModoAtivo(modo); atualizarVisibilidadeAndares(); if(msg) showAviso(msg); }
 
@@ -154,20 +239,13 @@ export function iniciarUI() {
 
   document.querySelectorAll('.node-btn').forEach(btn => { 
     btn.addEventListener('click', () => { 
-      const isAlreadyActive = btn.classList.contains('active'); 
-      const targetId = btn.getAttribute('data-target');
-
-      document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active')); 
-      document.querySelectorAll('.sub-panel').forEach(panel => panel.classList.remove('active')); 
+      const isAlreadyActive = btn.classList.contains('active'); const targetId = btn.getAttribute('data-target');
+      document.querySelectorAll('.node-btn').forEach(b => b.classList.remove('active')); document.querySelectorAll('.sub-panel').forEach(panel => panel.classList.remove('active')); 
 
       if (isAlreadyActive) { 
-          if(simsPanel) simsPanel.style.display = 'none'; 
-          ativarFerramenta('btnSairModo', null, null); 
+          if(simsPanel) simsPanel.style.display = 'none'; ativarFerramenta('btnSairModo', null, null); 
       } else { 
-          btn.classList.add('active'); 
-          const target = document.getElementById(targetId); 
-          if (target) target.classList.add('active'); 
-          if(simsPanel) simsPanel.style.display = 'flex'; 
+          btn.classList.add('active'); const target = document.getElementById(targetId); if (target) target.classList.add('active'); if(simsPanel) simsPanel.style.display = 'flex'; 
 
           if (targetId === 'panel-construcao') {
               estadoGlobal = 'construcao';
@@ -214,8 +292,11 @@ export function iniciarUI() {
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
+  document.getElementById('btnModoTelhado')?.addEventListener('click', () => ativarFerramenta('btnModoTelhado', 'telhado', 'Telhado: Clique dentro de um cômodo fechado para gerar a cobertura.'));
   
-  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação Livre.'));
+  document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Livre.'));
+
+  const botoesFuturos = ['btnModoTerreno']; botoesFuturos.forEach(id => { document.getElementById(id)?.addEventListener('click', () => showAviso("Em breve!")); });
 
   document.getElementById('btnRedimensionarMapa')?.addEventListener('click', () => { const w = parseInt(document.getElementById('inputMapaX').value) || 32, d = parseInt(document.getElementById('inputMapaZ').value) || 18; redimensionarMapa(w, d); showAviso(`Tabuleiro redimensionado para ${w}x${d}.`); });
 
