@@ -1,4 +1,4 @@
-// js/construtor.js - Motor Completo: Cutaway The Sims, Telhados Dinâmicos e Anti-Crash
+// js/construtor.js - Motor Completo: Cutaway The Sims, Telhados Dinâmicos e Anti-Crash Total
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta, estadoGlobal } from './ui.js';
@@ -65,12 +65,13 @@ function telhadoIntersectaParede(telhado, parede) {
     return (tMaxX + margem >= pMinX && tMinX - margem <= pMaxX && tMaxZ + margem >= pMinZ && tMinZ - margem <= pMaxZ);
 }
 
+// 🧠 A SOLUÇÃO MATEMÁTICA DEFINITIVA PARA TRIÂNGULOS (Interseção de Linhas)
 function doLineSegmentsIntersect(p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y) {
     const det = (p2x - p1x) * (p4y - p3y) - (p4x - p3x) * (p2y - p1y);
     if (det === 0) return false;
     const lambda = ((p4y - p3y) * (p4x - p1x) + (p3x - p4x) * (p4y - p1y)) / det;
     const gamma = ((p1y - p2y) * (p4x - p1x) + (p2x - p1x) * (p4y - p1y)) / det;
-    return (0 <= lambda && lambda <= 1) && (0 <= gamma && gamma <= 1);
+    return (lambda > -0.01 && lambda < 1.01) && (gamma > -0.01 && gamma < 1.01);
 }
 
 function paredeQueBloqueia(x1, z1, x2, z2) { 
@@ -270,44 +271,44 @@ function raycastPlanoBase(clientX, clientY) {
     return null; 
 }
 
-// 🔥 ARMADURA ANTI-CRASH DO RAYCASTER 🔥
+// 🔥 ARMADURA ANTI-CRASH TOTAL DO RAYCASTER 🔥
 function raycastObjetosDoNivel(clientX, clientY) { 
     mouseNdc.x = (clientX / window.innerWidth) * 2 - 1; mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1; 
     raycaster.setFromCamera(mouseNdc, camera); 
     
     const objetosNivel = [];
-    paredesConstruidas.forEach(p => { if (p.nivel === configsCamera.nivel && p.mesh) objetosNivel.push(p.mesh); });
-    pilaresConstruidos.forEach(p => { if (p.nivel === configsCamera.nivel && p.mesh) objetosNivel.push(p.mesh); });
-    pisosConstruidos.forEach(p => { if (p.nivel === configsCamera.nivel && p.mesh) objetosNivel.push(p.mesh); });
-    colunasSustentacao.forEach(c => { if (c.nivel === configsCamera.nivel && c.mesh) objetosNivel.push(c.mesh); });
-    escadasConstruidas.forEach(e => { if (e.nivel === configsCamera.nivel && e.mesh) objetosNivel.push(e.mesh); });
-    telhadosConstruidos.forEach(t => { if (t.nivel === configsCamera.nivel && t.mesh && telhadosVisiveisGlobais) objetosNivel.push(t.mesh); });
+    paredesConstruidas.forEach(p => { if (p.nivel === configsCamera.nivel && p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
+    pilaresConstruidos.forEach(p => { if (p.nivel === configsCamera.nivel && p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
+    pisosConstruidos.forEach(p => { if (p.nivel === configsCamera.nivel && p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
+    colunasSustentacao.forEach(c => { if (c.nivel === configsCamera.nivel && c.mesh && c.mesh.visible) objetosNivel.push(c.mesh); });
+    escadasConstruidas.forEach(e => { if (e.nivel === configsCamera.nivel && e.mesh && e.mesh.visible) objetosNivel.push(e.mesh); });
+    telhadosConstruidos.forEach(t => { if (t.nivel === configsCamera.nivel && t.mesh && t.mesh.visible) objetosNivel.push(t.mesh); });
     
-    if (configsCamera.nivel === 0 && meshChaoBase) objetosNivel.push(meshChaoBase); 
-    if (configsCamera.nivel < 0 && meshChaoMasmorra) objetosNivel.push(meshChaoMasmorra); 
+    if (configsCamera.nivel === 0 && meshChaoBase && meshChaoBase.visible) objetosNivel.push(meshChaoBase); 
+    if (configsCamera.nivel < 0 && meshChaoMasmorra && meshChaoMasmorra.visible) objetosNivel.push(meshChaoMasmorra); 
     
-    const objetosLimpos = [];
-    objetosNivel.forEach(obj => {
-        if (obj && obj.isObject3D) {
-            obj.traverse(child => {
-                if (child.isMesh) {
-                    if (!child.material) child.material = materialParede.clone();
-                    else if (Array.isArray(child.material)) {
-                        for (let i = 0; i < child.material.length; i++) {
-                            if (!child.material[i]) child.material[i] = materialParede.clone();
-                        }
-                    }
+    const objetosLimpos = objetosNivel.filter(obj => {
+        if (!obj) return false;
+        let valid = true;
+        obj.traverse(child => {
+            if (child.isMesh) {
+                if (!child.material) valid = false;
+                else if (Array.isArray(child.material)) {
+                    child.material.forEach(m => { if (!m || typeof m.side === 'undefined') valid = false; });
+                } else if (typeof child.material.side === 'undefined') {
+                    valid = false;
                 }
-            });
-            objetosLimpos.push(obj);
-        }
+            }
+        });
+        return valid;
     });
 
     try {
         const hits = raycaster.intersectObjects(objetosLimpos, true); 
         return hits.length ? hits[0] : null; 
     } catch (err) {
-        return null; // Silencia o erro 100%
+        console.error("Raycast salvo pelo Anti-Crash!");
+        return null; 
     }
 }
 
@@ -387,7 +388,6 @@ function verificarSalasFechadas(px, pz, pontoA) {
             const centerAreaX = (minX + maxX)/2, centerAreaZ = (minZ + maxZ)/2;
             const existe = telhadosConstruidos.find(t => t.nivel === configsCamera.nivel && Math.abs((t.ax+t.bx)/2 - centerAreaX) < 0.1 && Math.abs((t.az+t.bz)/2 - centerAreaZ) < 0.1);
             if (!existe) {
-                // Passa o formato da ferramenta para que a reconstrução molde as águas
                 criarTelhado(minX, minZ, maxX, maxZ, 3.0, configsCamera.nivel, modoAtivo);
                 showAviso("🏠 Cômodo fechado detectado! Telhado gerado.");
                 telhadoGerado = true;
@@ -496,32 +496,6 @@ canvas?.addEventListener('pointerdown', e => {
 
   const isRemocao = e.ctrlKey || e.metaKey || e.button === 2;
 
-  if (modoAtivo === 'telhado') {
-      if (isRemocao) {
-          const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
-          if (hitAll) executarMarreta(hitAll.object);
-          return;
-      }
-      const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
-      const chaoHit = raycastPlanoBase(e.clientX, e.clientY);
-      const clickPoint = hitAll ? hitAll.point : (chaoHit ? chaoHit.point : null);
-      if (clickPoint) {
-          let startX = snapCentroCelula(clickPoint.x); let startZ = snapCentroCelula(clickPoint.z);
-          const { celulas, fechada } = encontrarAreaFechada(startX, startZ);
-          if (fechada && celulas.length > 0 && celulas.length < 5000) {
-              let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-              const t = configMapa.tamanhoGrid;
-              celulas.forEach(c => { minX = Math.min(minX, c.x - t/2); maxX = Math.max(maxX, c.x + t/2); minZ = Math.min(minZ, c.z - t/2); maxZ = Math.max(maxZ, c.z + t/2); });
-              minX -= 0.25; maxX += 0.25; minZ -= 0.25; maxZ += 0.25; 
-              const cx = (minX + maxX)/2; const cz = (minZ + maxZ)/2;
-              const existe = telhadosConstruidos.find(t => t.nivel === configsCamera.nivel && Math.abs((t.ax+t.bx)/2 - cx) < 0.1 && Math.abs((t.az+t.bz)/2 - cz) < 0.1);
-              if(!existe) { iniciarAcao(); criarTelhado(minX, minZ, maxX, maxZ, 3.0, configsCamera.nivel, 'retangulo'); finalizarAcao(); showAviso("Telhado gerado! Selecione a Mãozinha para ajustar a altura."); } 
-              else { showAviso("Já existe um telhado nesta sala."); }
-          } else { showAviso("Clique dentro de um cômodo fechado para criar o telhado!"); }
-      }
-      return;
-  }
-
   if (!modoAtivo && !isRemocao && !e.altKey && !e.shiftKey) {
       if (grupoSetas.visible) {
           raycaster.setFromCamera(mouseNdc, camera); const hitsSetas = raycaster.intersectObjects(grupoSetas.children);
@@ -583,6 +557,7 @@ canvas?.addEventListener('pointerdown', e => {
       const isColuna = targetObject && colunasSustentacao.some(p => p.mesh === targetObject);
       const isTelhado = getRootTelhado(targetObject);
 
+      // PINTAR COM SHIFT (FLOOD FILL)
       if (e.shiftKey && !isTelhado) {
           let startX = snapCentroCelula(clickPoint.x); let startZ = snapCentroCelula(clickPoint.z);
           if (targetObject && (isParede || isPilar)) {
@@ -592,13 +567,15 @@ canvas?.addEventListener('pointerdown', e => {
               startX = snapCentroCelula(clickPoint.x + worldNormal.x * 0.1); startZ = snapCentroCelula(clickPoint.z + worldNormal.z * 0.1);
           }
           
-          const { celulas, fechada } = encontrarAreaFechada(startX, startZ);
-          if (!fechada && !isRemocao) { showAviso("⚠️ O cômodo está aberto! Feche as paredes para usar o Preenchimento (Shift)."); return; }
+          const { celulas } = encontrarAreaFechada(startX, startZ);
 
           if (targetObject && (isParede || isPilar)) {
              celulas.forEach(c => { [['x',1],['x',-1],['z',1],['z',-1]].forEach(([eixo, dir]) => { const dx = eixo==='x' ? configMapa.tamanhoGrid * dir : 0, dz = eixo==='z' ? configMapa.tamanhoGrid * dir : 0; const p = paredeQueBloqueia(c.x, c.z, c.x + dx, c.z + dz); if (p && !p.isPorta && !p.isCerca) { const dirNorm = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z).normalize(); if (isRemocao) { removerPinturaFacePorNormal(p.mesh, dirNorm, materialParede); if (p.pilarA) removerPinturaFacePorNormal(p.pilarA.mesh, dirNorm, materialParede); if (p.pilarB) removerPinturaFacePorNormal(p.pilarB.mesh, dirNorm, materialParede); } else { pintarFacePorNormalMundial(p.mesh, dirNorm, item); if (p.pilarA) pintarFacePorNormalMundial(p.pilarA.mesh, dirNorm, item); if (p.pilarB) pintarFacePorNormalMundial(p.pilarB.mesh, dirNorm, item); } } }); });
-          } else { celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); }
+          } else { 
+              celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); 
+          }
       } else {
+          // PINTURA DE CLICK NORMAL
           if (isTelhado) { 
               isTelhado.mesh.children.forEach(piramide => { registrarPintura(piramide); piramide.material = isRemocao ? [materialTelhadoPadrão.clone(), new THREE.MeshBasicMaterial({ color: 0x000000, visible: false })] : [gerarMaterialPintura(item, Math.max(1, isTelhado.largura/configMapa.tamanhoGrid), Math.max(1, isTelhado.profundidade/configMapa.tamanhoGrid)), new THREE.MeshBasicMaterial({ color: 0x000000, visible: false })]; finalizarPintura(piramide); });
               isTelhado.textura = isRemocao ? null : item; return; 
@@ -799,7 +776,7 @@ function setOpacity(mesh, isTransparent, opacity) {
     else if (mesh.material) { if (mesh.material.transparent !== isTransparent) mesh.material.needsUpdate = true; mesh.material.transparent = isTransparent; mesh.material.opacity = opacity; } 
 }
 
-// 🔥 NOVO CUTAWAY - VISÃO DE PAREDE "THE SIMS" 🔥
+// 🔥 CUTAWAY - VISÃO DE PAREDE "THE SIMS" 🔥
 export function atualizarVisibilidadeAndares(modoVisaoManual) {
   if (modoVisaoManual) modoVisaoAtual = modoVisaoManual; 
   const alturaAtual = configsCamera.nivel * obterAltura();

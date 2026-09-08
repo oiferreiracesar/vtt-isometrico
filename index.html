@@ -5,10 +5,16 @@
   <title>Masmorra Isométrica - VTT</title>
   <link rel="stylesheet" href="style.css">
   <style>
+    /* Estilos das Abas da Paleta */
     .paleta-tab { flex: 1; padding: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; cursor: pointer; border-radius: 4px; font-size: 11px; text-transform: uppercase; font-weight: bold; transition: all 0.2s; min-width: 50px; text-align: center; }
     .paleta-tab:hover { background: rgba(255,255,255,0.1); }
     .paleta-tab.ativo { background: rgba(56,189,248,0.2); color: #38bdf8; border-color: #38bdf8; }
   </style>
+  <script>
+    window.addEventListener('error', function(e) {
+      console.warn('Alerta do Sistema:', e.message);
+    });
+  </script>
 </head>
 <body>
   <canvas id="canvas3d"></canvas>
@@ -21,15 +27,16 @@
   <div id="modalAjuda" class="glass-panel" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 24px 32px; z-index: 2000; color: #e2e8f0; min-width: 420px; flex-direction: column; gap: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
     <h2 style="margin: 0; color: #38bdf8; font-size: 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">Atalhos The Sims (Modo Construção)</h2>
     <ul style="list-style: none; padding: 0; margin: 0; font-size: 14px; line-height: 2.2;">
-      <li><strong style="color: #4ade80; display: inline-block; width: 140px;">Esc</strong> Voltar para Mãozinha</li>
-      <li><strong style="color: #4ade80; display: inline-block; width: 140px;">Ctrl + Z</strong> Desfazer ação</li>
-      <li><strong style="color: #4ade80; display: inline-block; width: 140px;">Botão Direito</strong> Marreta / Borracha</li>
-      <li><strong style="color: #4ade80; display: inline-block; width: 140px;">Shift + Clique Esq.</strong> Preencher Cômodo</li>
-      <li><strong style="color: #4ade80; display: inline-block; width: 140px;">Shift + Botão Dir.</strong> Apagar Cômodo</li>
-      <li><strong style="color: #4ade80; display: inline-block; width: 140px;">Alt + Clique</strong> Conta-gotas (Textura)</li>
-      <li><strong style="color: #4ade80; display: inline-block; width: 140px;">Tecla G</strong> Ocultar/Exibir Grade</li>
-      <li><strong style="color: #4ade80; display: inline-block; width: 140px;">Duplo Clique</strong> Focar a Câmera</li>
-      <li><strong style="color: #4ade80; display: inline-block; width: 140px;">Botão do Meio</strong> Arrastar Câmera</li>
+      <li><strong style="color: #4ade80; display: inline-block; width: 150px;">Esc</strong> Mãozinha / Selecionar</li>
+      <li><strong style="color: #4ade80; display: inline-block; width: 150px;">Ctrl + Z</strong> Desfazer ação</li>
+      <li><strong style="color: #4ade80; display: inline-block; width: 150px;">Botão Direito</strong> Marreta / Borracha</li>
+      <li><strong style="color: #4ade80; display: inline-block; width: 150px;">Shift + Clique Esq.</strong> Preencher Cômodo</li>
+      <li><strong style="color: #4ade80; display: inline-block; width: 150px;">Shift + Botão Dir.</strong> Apagar Cômodo</li>
+      <li><strong style="color: #4ade80; display: inline-block; width: 150px;">Alt + Clique</strong> Pipeta (Copiar Material)</li>
+      <li><strong style="color: #4ade80; display: inline-block; width: 150px;">Teclas M / R</strong> Mover / Rotacionar Peça</li>
+      <li><strong style="color: #4ade80; display: inline-block; width: 150px;">Tecla G</strong> Ocultar/Exibir Grade</li>
+      <li><strong style="color: #4ade80; display: inline-block; width: 150px;">Page Up / Page Down</strong> Subir / Descer Andar</li>
+      <li><strong style="color: #4ade80; display: inline-block; width: 150px;">Home / End</strong> Alternar Visão de Parede</li>
     </ul>
     <button id="btnFecharAjuda" class="tool-btn" style="margin-top: 8px; width: 100%; height: 44px; font-size: 15px; font-weight: bold; background: rgba(56, 189, 248, 0.2); border-color: #38bdf8; color: #38bdf8; border-radius: 8px;">Entendi!</button>
   </div>
@@ -61,8 +68,8 @@
       <button class="cam-btn" id="camZoomIn" title="Aproximar (Z ou +)">➕</button>
     </div>
     <div class="cam-row walls">
-      <button class="cam-btn ativo" id="camWallFull" title="Paredes Erguidas">🧱</button>
-      <button class="cam-btn" id="camWallCut" title="Paredes Transparentes">🪟</button>
+      <button class="cam-btn" id="camWallFull" title="Paredes Erguidas">🧱</button>
+      <button class="cam-btn ativo" id="camWallCut" title="Paredes Transparentes (Visão de Jogo)">🪟</button>
       <button class="cam-btn" id="camWallLow" title="Paredes Rebaixadas">🕳️</button>
       <button class="cam-btn ativo" id="camRoofToggle" title="Ocultar/Exibir Telhados">🏠</button>
     </div>
@@ -83,20 +90,19 @@
           <button class="tool-btn" id="btnDesfazer" title="Desfazer (Ctrl+Z)" style="background: rgba(255,255,255,0.1);">↩️</button>
           <button class="tool-btn" id="btnRefazer" title="Refazer (Ctrl+Shift+Z)" style="background: rgba(255,255,255,0.1);">↪️</button>
           <div class="divider"></div>
-          <button class="tool-btn" id="btnModoParede" title="Parede (Arraste para criar)">🧱</button>
+          <button class="tool-btn" id="btnModoParede" title="Parede Livre">🧱</button>
           <button class="tool-btn" id="btnModoCerca" title="Cerca (Delimita sem fechar)">🚧</button>
-          <button class="tool-btn" id="btnModoRetangulo" title="Sala Retangular (Arraste)">⬜</button>
-          <button class="tool-btn" id="btnModoTriangulo" title="Sala Triangular (Arraste)">🔺</button>
-          <button class="tool-btn" id="btnModoOctogono" title="Sala Octogonal (Arraste)">🛑</button>
+          <button class="tool-btn" id="btnModoRetangulo" title="Sala Retangular">⬜</button>
+          <button class="tool-btn" id="btnModoTriangulo" title="Sala Triangular">🔺</button>
+          <button class="tool-btn" id="btnModoOctogono" title="Sala Octogonal">🛑</button>
           <button class="tool-btn" id="btnModoPorta" title="Portas/Janelas (Gruda na Parede)">🚪</button>
-          <button class="tool-btn" id="btnModoPintura" title="Pintura (Shift = Tudo, Botão Direito = Apagar, Alt = Pipeta)">🎨</button>
+          <button class="tool-btn" id="btnModoPintura" title="Pintura Inteligente">🎨</button>
           <button class="tool-btn ativo" id="btnSairModo" title="Mãozinha (Esc)">🖐️</button>
         </div>
         <div class="tool-group" style="margin-top: 8px;">
           <button class="tool-btn" id="btnModoEscada" title="Escada Subindo (Arraste)">🪜</button>
           <button class="tool-btn" id="btnModoEscadaBaixo" title="Escada Descendo (Arraste)">🕳️</button>
           <button class="tool-btn" id="btnModoColuna" title="Coluna de Sustentação">🏛️</button>
-          <button class="tool-btn" id="btnModoTelhado" title="Telhados Automáticos (Clique na sala)">🏠</button>
           <button class="tool-btn" id="btnModoTerreno" title="Paisagismo (Em breve)" style="opacity: 0.5;">🌳</button>
         </div>
         
