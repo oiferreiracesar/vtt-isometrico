@@ -347,41 +347,46 @@ function raycastPlanoBase(clientX, clientY) {
     return null; 
 }
 
+// 🔥 ARMADURA ANTI-CRASH TOTAL DO RAYCASTER (CORRIGIDO) 🔥
 function raycastObjetosDoNivel(clientX, clientY) { 
     mouseNdc.x = (clientX / window.innerWidth) * 2 - 1; mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1; 
     raycaster.setFromCamera(mouseNdc, camera); 
     
     const objetosNivel = [];
-    paredesConstruidas.forEach(p => { if (p.nivel === configsCamera.nivel && p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
-    pilaresConstruidos.forEach(p => { if (p.nivel === configsCamera.nivel && p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
-    pisosConstruidos.forEach(p => { if (p.nivel === configsCamera.nivel && p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
-    colunasSustentacao.forEach(c => { if (c.nivel === configsCamera.nivel && c.mesh && c.mesh.visible) objetosNivel.push(c.mesh); });
-    escadasConstruidas.forEach(e => { if (e.nivel === configsCamera.nivel && e.mesh && e.mesh.visible) objetosNivel.push(e.mesh); });
-    telhadosConstruidos.forEach(t => { if (t.nivel === configsCamera.nivel && t.mesh && telhadosVisiveisGlobais) objetosNivel.push(t.mesh); });
+    // Correção: Agora o mouse enxerga TUDO o que está visível, e não apenas o do andar atual
+    paredesConstruidas.forEach(p => { if (p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
+    pilaresConstruidos.forEach(p => { if (p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
+    pisosConstruidos.forEach(p => { if (p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
+    colunasSustentacao.forEach(c => { if (c.mesh && c.mesh.visible) objetosNivel.push(c.mesh); });
+    escadasConstruidas.forEach(e => { if (e.mesh && e.mesh.visible) objetosNivel.push(e.mesh); });
+    telhadosConstruidos.forEach(t => { if (t.mesh && t.mesh.visible && telhadosVisiveisGlobais) objetosNivel.push(t.mesh); });
     
-    if (configsCamera.nivel === 0 && meshChaoBase && meshChaoBase.visible) objetosNivel.push(meshChaoBase); 
+    if (configsCamera.nivel >= 0 && meshChaoBase && meshChaoBase.visible) objetosNivel.push(meshChaoBase); 
     if (configsCamera.nivel < 0 && meshChaoMasmorra && meshChaoMasmorra.visible) objetosNivel.push(meshChaoMasmorra); 
     
     const objetosLimpos = objetosNivel.filter(obj => {
-        if (!obj) return false;
-        let valid = true;
+        if (!obj || !obj.isObject3D) return false;
+        // Cura silenciosa das faces da parede sem excluir o objeto do radar
         obj.traverse(child => {
             if (child.isMesh) {
-                if (!child.material) valid = false;
+                if (!child.material) child.material = materialParede.clone();
                 else if (Array.isArray(child.material)) {
-                    child.material.forEach(m => { if (!m || typeof m.side === 'undefined') valid = false; });
-                } else if (typeof child.material.side === 'undefined') {
-                    valid = false;
+                    for (let i = 0; i < child.material.length; i++) {
+                        if (!child.material[i]) child.material[i] = materialParede.clone();
+                    }
                 }
             }
         });
-        return valid;
+        return true; // Garante que a parede nunca seja ignorada pelo clique
     });
 
     try {
         const hits = raycaster.intersectObjects(objetosLimpos, true); 
         return hits.length ? hits[0] : null; 
-    } catch (err) { return null; }
+    } catch (err) {
+        console.warn("Raycast salvo pelo Anti-Crash!");
+        return null; 
+    }
 }
 
 export function resetarEstadoConstrucao() { setModoAtivo(null); }
