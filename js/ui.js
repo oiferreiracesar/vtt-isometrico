@@ -1,5 +1,5 @@
 // js/ui.js - Bibliotecas de Texturas com Cache de API
-import { setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
+import { carregarAutosave, setModoAtivo, atualizarVisibilidadeAndares, desfazer, refazer, iniciarArrasteSelecionado, girarSelecionado, deletarSelecionado, alterarDimensaoGizmo, alterarAlturaGizmo, exportarMapa, importarMapa, limparMapa, toggleTelhadosGlobais, resetarEstadoConstrucao } from './construtor.js';
 import { configsCamera, atualizarCamera } from './engine.js';
 import { redimensionarMapa, gridHelper } from './mapa.js';
 
@@ -130,6 +130,7 @@ function carregarBancoDeAssets() {
 
 export function iniciarUI() {
   carregarBancoDeAssets();
+  carregarAutosave(); // Aciona a recuperação invisível de dados (A-01)
 
   const paletaBotoes = document.getElementById('paletaBotoes');
   if (paletaBotoes && !document.getElementById('btnSyncAPI')) {
@@ -241,6 +242,7 @@ export function iniciarUI() {
   document.getElementById('btnModoEscada')?.addEventListener('click', () => ativarFerramenta('btnModoEscada', 'escada', 'Escada Subindo: Arraste para a direção superior.'));
   document.getElementById('btnModoEscadaBaixo')?.addEventListener('click', () => ativarFerramenta('btnModoEscadaBaixo', 'escada_baixo', 'Escada Descendo: Arraste para escavar um subsolo.'));
   document.getElementById('btnModoColuna')?.addEventListener('click', () => ativarFerramenta('btnModoColuna', 'coluna', 'Coluna: Guias do andar superior ativas!'));
+  
   document.getElementById('btnSairModo')?.addEventListener('click', () => ativarFerramenta('btnSairModo', null, 'Navegação: Livre.'));
 
   document.getElementById('btnRedimensionarMapa')?.addEventListener('click', () => { const w = parseInt(document.getElementById('inputMapaX').value) || 32, d = parseInt(document.getElementById('inputMapaZ').value) || 18; redimensionarMapa(w, d); showAviso(`Tabuleiro redimensionado para ${w}x${d}.`); });

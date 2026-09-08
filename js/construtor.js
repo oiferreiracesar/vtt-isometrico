@@ -1,4 +1,4 @@
-// js/construtor.js - Motor Completo: Cutaway The Sims, Telhados Dinâmicos (3 e 8 Águas) e Anti-Crash Total
+// js/construtor.js - Motor Completo: Cutaway, Telhados, Anti-Crash, Memória e Autosave (P0)
 import { scene, camera, canvas, configsCamera, orbitAlvo, atualizarCamera } from './engine.js';
 import { configMapa, meshChaoBase, meshChaoMasmorra, gridHelper } from './mapa.js';
 import { showAviso, itemSelecionadoAtual, mostrarGizmo, esconderGizmo, selecionarMaterialNaPaleta, estadoGlobal } from './ui.js';
@@ -54,6 +54,105 @@ const materialPreviaEscada = new THREE.MeshBasicMaterial({ color: 0x4ade80, tran
 
 const cacheTexturas = {}; 
 
+// --- CORE P0: GERENCIAMENTO DE MEMÓRIA DE GPU E DADOS ---
+function liberarMemoriaMesh(mesh) {
+    if (!mesh) return;
+    mesh.traverse((child) => {
+        if (child.isMesh) {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+                if (Array.isArray(child.material)) child.material.forEach(m => m && m.dispose());
+                else child.material.dispose();
+            }
+        }
+    });
+}
+
+function gerarDadosMapa() {
+    return {
+        versao: 4, 
+        pisos: pisosConstruidos.map(p => ({ x: p.x, z: p.z, nivel: p.nivel, materiais: extrairMateriais(p.mesh) })),
+        pilares: pilaresConstruidos.map(p => ({ x: p.x, z: p.z, altura: p.altura, nivel: p.nivel, isCerca: p.isCerca, comodoId: p.comodoId, materiais: extrairMateriais(p.mesh) })),
+        paredes: paredesConstruidas.map(p => ({ ax: p.ax, az: p.az, bx: p.bx, bz: p.bz, altura: p.altura, isCerca: p.isCerca, comodoId: p.comodoId, nivel: p.nivel, isPorta: p.isPorta, materiais: extrairMateriais(p.mesh) })),
+        colunas: colunasSustentacao.map(c => ({ x: c.x, z: c.z, altura: c.altura, nivel: c.nivel, materiais: extrairMateriais(c.mesh) })),
+        escadas: escadasConstruidas.map(e => ({ ax: e.ax, az: e.az, bx: e.bx, bz: e.bz, alturaAndar: e.alturaAndar, largura: e.largura, nivel: e.nivel, material: extrairMaterialEscada(e) })),
+        telhados: telhadosConstruidos.map(t => ({ ax: t.ax, az: t.az, bx: t.bx, bz: t.bz, alturaTelhado: t.alturaTelhado, largura: t.largura, profundidade: t.profundidade, nivel: t.nivel, formato: t.formato, material: extrairMaterialEscada(t) }))
+    };
+}
+
+function salvarAutosave() {
+    try { localStorage.setItem('vtt_autosave', JSON.stringify(gerarDadosMapa())); } 
+    catch (e) { console.warn("Falha no autosave local."); }
+}
+
+export function carregarAutosave() {
+    try {
+        const dadosStr = localStorage.getItem('vtt_autosave');
+        if (dadosStr) {
+            const dados = JSON.parse(dadosStr);
+            if (dados && dados.versao) importarMapa(dados, true);
+        }
+    } catch (e) { console.warn("Sem autosave compatível."); }
+}
+
+export function limparMapa(ignorarBackup = false) {
+    if (!ignorarBackup) {
+        try { localStorage.setItem('vtt_backup_demolicao', JSON.stringify(gerarDadosMapa())); } catch(e){}
+    }
+
+    [...paredesConstruidas, ...pilaresConstruidos, ...pisosConstruidos, ...colunasSustentacao, ...telhadosConstruidos].forEach(obj => { 
+        liberarMemoriaMesh(obj.mesh); scene.remove(obj.mesh); 
+    });
+    escadasConstruidas.forEach(e => { liberarMemoriaMesh(e.mesh); scene.remove(e.mesh); });
+    
+    // Libera a memória das malhas descartadas permanentemente no histórico
+    historicoUndo.forEach(acao => acao.rem.forEach(item => liberarMemoriaMesh(item.obj.mesh)));
+    historicoRedo.forEach(acao => acao.add.forEach(item => liberarMemoriaMesh(item.obj.mesh)));
+
+    paredesConstruidas.length = 0; pilaresConstruidos.length = 0; pisosConstruidos.length = 0; colunasSustentacao.length = 0; escadasConstruidas.length = 0; comodosConstruidos.length = 0; telhadosConstruidos.length = 0;
+    historicoUndo.length = 0; historicoRedo.length = 0; 
+    setModoAtivo(null); atualizarVisibilidadeAndares(); 
+    salvarAutosave();
+    if (!ignorarBackup) showAviso("Tabuleiro demolido! Use o Refazer se foi um erro.");
+}
+
+export function exportarMapa() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gerarDadosMapa()));
+    const downloadNode = document.createElement('a'); downloadNode.setAttribute("href", dataStr); downloadNode.setAttribute("download", "masmorra_decorada.json");
+    document.body.appendChild(downloadNode); downloadNode.click(); downloadNode.remove(); showAviso("Projeto exportado com sucesso!");
+}
+
+export function importarMapa(dados, isAutosave = false) {
+    if (!dados || !dados.versao || typeof dados.versao !== 'number') {
+        showAviso("ERRO CRÍTICO: O arquivo está corrompido ou incompatível. Importação bloqueada.");
+        return;
+    }
+    
+    limparMapa(true); 
+    const nivelOriginal = configsCamera.nivel; 
+    
+    try {
+        const comodosIds = new Set();
+        if (dados.paredes) dados.paredes.forEach(p => { if(p.comodoId) comodosIds.add(p.comodoId); });
+        if (dados.pilares) dados.pilares.forEach(p => { if(p.comodoId) comodosIds.add(p.comodoId); });
+        comodosIds.forEach(id => comodosConstruidos.push({ id, paredes: [], pilares: [] }));
+
+        if(dados.pisos) dados.pisos.forEach(p => { configsCamera.nivel = p.nivel; aplicarPiso(p.x, p.z, { tipo: 'cor', cor: '#8a7550' }); const piso = pisosConstruidos.find(tile => Math.abs(tile.x - p.x) < 0.01 && Math.abs(tile.z - p.z) < 0.01 && tile.nivel === p.nivel); if(piso) aplicarMateriaisImportados(piso.mesh, p.materiais, 'piso'); });
+        if(dados.pilares) dados.pilares.forEach(p => { configsCamera.nivel = p.nivel; const pilar = obterOuCriarPilar(p.x, p.z, p.altura, p.isCerca, p.comodoId); if(pilar) aplicarMateriaisImportados(pilar.mesh, p.materiais, 'pilar'); });
+        if(dados.paredes) dados.paredes.forEach(p => { configsCamera.nivel = p.nivel; criarSegmentoParede(p.ax, p.az, p.bx, p.bz, p.altura, p.isCerca, p.comodoId); const parede = paredesConstruidas.find(w => Math.abs(w.ax - p.ax) < 0.01 && Math.abs(w.az - p.az) < 0.01 && Math.abs(w.bx - p.bx) < 0.01 && Math.abs(w.bz - p.bz) < 0.01 && w.nivel === p.nivel); if (parede) { aplicarMateriaisImportados(parede.mesh, p.materiais, 'parede'); if (p.isPorta) { parede.isPorta = true; const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 }); parede.mesh.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta]; } } });
+        if(dados.colunas) dados.colunas.forEach(c => { configsCamera.nivel = c.nivel; criarColunaSustentacao(c.x, c.z, c.altura); const col = colunasSustentacao.find(col => Math.abs(col.x - c.x) < 0.01 && Math.abs(col.z - c.z) < 0.01 && col.nivel === c.nivel); if(col) aplicarMateriaisImportados(col.mesh, c.materiais, 'coluna'); });
+        if(dados.escadas) dados.escadas.forEach(e => { configsCamera.nivel = e.nivel; criarEscada(e.ax, e.az, e.bx, e.bz, e.alturaAndar, e.largura, e.nivel); const escada = escadasConstruidas.find(s => Math.abs(s.ax - e.ax) < 0.01 && Math.abs(s.az - e.az) < 0.01 && Math.abs(s.bx - e.bx) < 0.01 && Math.abs(s.bz - e.bz) < 0.01 && s.nivel === e.nivel); if (escada && e.material) { escada.textura = { tipo: e.material.tipo, cor: e.material.cor, dataUrl: e.material.dataUrl }; escada.mesh.children.forEach(child => aplicarMateriaisImportados(child, [e.material], 'escada')); } });
+        if(dados.telhados) dados.telhados.forEach(t => { configsCamera.nivel = t.nivel; criarTelhado(t.ax, t.az, t.bx, t.bz, t.alturaTelhado, t.nivel, t.formato || 'retangulo'); const tel = telhadosConstruidos[telhadosConstruidos.length - 1]; if(tel && t.material) { tel.textura = { tipo: t.material.tipo, cor: t.material.cor, dataUrl: t.material.dataUrl }; tel.mesh.children.forEach(child => aplicarMateriaisImportados(child, [t.material], 'telhado')); } });
+    } finally {
+        configsCamera.nivel = nivelOriginal; 
+        historicoUndo.length = 0; acaoAtual = null; 
+        atualizarVisibilidadeAndares(); 
+        if (!isAutosave) showAviso("Decorações carregadas com sucesso!");
+    }
+}
+
+// --- FIM CORE P0 ---
+
 export function toggleTelhadosGlobais(visivel) { telhadosVisiveisGlobais = visivel; atualizarVisibilidadeAndares(); }
 
 function telhadoIntersectaParede(telhado, parede) {
@@ -65,7 +164,6 @@ function telhadoIntersectaParede(telhado, parede) {
     return (tMaxX + margem >= pMinX && tMinX - margem <= pMaxX && tMaxZ + margem >= pMinZ && tMinZ - margem <= pMaxZ);
 }
 
-// 🧠 A SOLUÇÃO MATEMÁTICA DEFINITIVA PARA PAREDES DIAGONAIS
 function doLineSegmentsIntersect(p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y) {
     const det = (p2x - p1x) * (p4y - p3y) - (p4x - p3x) * (p2y - p1y);
     if (det === 0) return false;
@@ -163,46 +261,22 @@ export function gerarMaterialPintura(item, repeatX = 1, repeatY = 1) {
     return mat; 
 }
 
-export function limparMapa() {
-    [...paredesConstruidas, ...pilaresConstruidos, ...pisosConstruidos, ...colunasSustentacao, ...telhadosConstruidos].forEach(obj => scene.remove(obj.mesh));
-    escadasConstruidas.forEach(e => scene.remove(e.mesh));
-    paredesConstruidas.length = 0; pilaresConstruidos.length = 0; pisosConstruidos.length = 0; colunasSustentacao.length = 0; escadasConstruidas.length = 0; comodosConstruidos.length = 0; telhadosConstruidos.length = 0;
-    historicoUndo.length = 0; historicoRedo.length = 0; setModoAtivo(null); atualizarVisibilidadeAndares(); showAviso("Tabuleiro completamente limpo!");
-}
-
-export function exportarMapa() {
-    const dados = {
-        versao: 4, 
-        pisos: pisosConstruidos.map(p => ({ x: p.x, z: p.z, nivel: p.nivel, materiais: extrairMateriais(p.mesh) })),
-        pilares: pilaresConstruidos.map(p => ({ x: p.x, z: p.z, altura: p.altura, nivel: p.nivel, isCerca: p.isCerca, comodoId: p.comodoId, materiais: extrairMateriais(p.mesh) })),
-        paredes: paredesConstruidas.map(p => ({ ax: p.ax, az: p.az, bx: p.bx, bz: p.bz, altura: p.altura, isCerca: p.isCerca, comodoId: p.comodoId, nivel: p.nivel, isPorta: p.isPorta, materiais: extrairMateriais(p.mesh) })),
-        colunas: colunasSustentacao.map(c => ({ x: c.x, z: c.z, altura: c.altura, nivel: c.nivel, materiais: extrairMateriais(c.mesh) })),
-        escadas: escadasConstruidas.map(e => ({ ax: e.ax, az: e.az, bx: e.bx, bz: e.bz, alturaAndar: e.alturaAndar, largura: e.largura, nivel: e.nivel, material: extrairMaterialEscada(e) })),
-        telhados: telhadosConstruidos.map(t => ({ ax: t.ax, az: t.az, bx: t.bx, bz: t.bz, alturaTelhado: t.alturaTelhado, largura: t.largura, profundidade: t.profundidade, nivel: t.nivel, formato: t.formato, material: extrairMaterialEscada(t) }))
-    };
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dados));
-    const downloadNode = document.createElement('a'); downloadNode.setAttribute("href", dataStr); downloadNode.setAttribute("download", "masmorra_decorada.json");
-    document.body.appendChild(downloadNode); downloadNode.click(); downloadNode.remove(); showAviso("Projeto exportado com sucesso!");
-}
-
-export function importarMapa(dados) {
-    limparMapa(); const nivelOriginal = configsCamera.nivel; const comodosIds = new Set();
-    if (dados.paredes) dados.paredes.forEach(p => { if(p.comodoId) comodosIds.add(p.comodoId); });
-    if (dados.pilares) dados.pilares.forEach(p => { if(p.comodoId) comodosIds.add(p.comodoId); });
-    comodosIds.forEach(id => comodosConstruidos.push({ id, paredes: [], pilares: [] }));
-
-    if(dados.pisos) dados.pisos.forEach(p => { configsCamera.nivel = p.nivel; aplicarPiso(p.x, p.z, { tipo: 'cor', cor: '#8a7550' }); const piso = pisosConstruidos.find(tile => Math.abs(tile.x - p.x) < 0.01 && Math.abs(tile.z - p.z) < 0.01 && tile.nivel === p.nivel); if(piso) aplicarMateriaisImportados(piso.mesh, p.materiais, 'piso'); });
-    if(dados.pilares) dados.pilares.forEach(p => { configsCamera.nivel = p.nivel; const pilar = obterOuCriarPilar(p.x, p.z, p.altura, p.isCerca, p.comodoId); if(pilar) aplicarMateriaisImportados(pilar.mesh, p.materiais, 'pilar'); });
-    if(dados.paredes) dados.paredes.forEach(p => { configsCamera.nivel = p.nivel; criarSegmentoParede(p.ax, p.az, p.bx, p.bz, p.altura, p.isCerca, p.comodoId); const parede = paredesConstruidas.find(w => Math.abs(w.ax - p.ax) < 0.01 && Math.abs(w.az - p.az) < 0.01 && Math.abs(w.bx - p.bx) < 0.01 && Math.abs(w.bz - p.bz) < 0.01 && w.nivel === p.nivel); if (parede) { aplicarMateriaisImportados(parede.mesh, p.materiais, 'parede'); if (p.isPorta) { parede.isPorta = true; const matPorta = new THREE.MeshLambertMaterial({ color: 0x4a3320 }); parede.mesh.material = [matPorta, matPorta, matPorta, matPorta, matPorta, matPorta]; } } });
-    if(dados.colunas) dados.colunas.forEach(c => { configsCamera.nivel = c.nivel; criarColunaSustentacao(c.x, c.z, c.altura); const col = colunasSustentacao.find(col => Math.abs(col.x - c.x) < 0.01 && Math.abs(col.z - c.z) < 0.01 && col.nivel === c.nivel); if(col) aplicarMateriaisImportados(col.mesh, c.materiais, 'coluna'); });
-    if(dados.escadas) dados.escadas.forEach(e => { configsCamera.nivel = e.nivel; criarEscada(e.ax, e.az, e.bx, e.bz, e.alturaAndar, e.largura, e.nivel); const escada = escadasConstruidas.find(s => Math.abs(s.ax - e.ax) < 0.01 && Math.abs(s.az - e.az) < 0.01 && Math.abs(s.bx - e.bx) < 0.01 && Math.abs(s.bz - e.bz) < 0.01 && s.nivel === e.nivel); if (escada && e.material) { escada.textura = { tipo: e.material.tipo, cor: e.material.cor, dataUrl: e.material.dataUrl }; escada.mesh.children.forEach(child => aplicarMateriaisImportados(child, [e.material], 'escada')); } });
-    if(dados.telhados) dados.telhados.forEach(t => { configsCamera.nivel = t.nivel; criarTelhado(t.ax, t.az, t.bx, t.bz, t.alturaTelhado, t.nivel, t.formato || 'retangulo'); const tel = telhadosConstruidos[telhadosConstruidos.length - 1]; if(tel && t.material) { tel.textura = { tipo: t.material.tipo, cor: t.material.cor, dataUrl: t.material.dataUrl }; tel.mesh.children.forEach(child => aplicarMateriaisImportados(child, [t.material], 'telhado')); } });
-
-    configsCamera.nivel = nivelOriginal; historicoUndo.length = 0; acaoAtual = null; atualizarVisibilidadeAndares(); showAviso("Decorações carregadas com sucesso!");
-}
-
 function iniciarAcao() { acaoAtual = { add: [], rem: [], paint: [], move: [] }; }
-function finalizarAcao() { if (!acaoAtual) return; if (acaoAtual.add.length > 0 || acaoAtual.rem.length > 0 || acaoAtual.paint.length > 0 || acaoAtual.move.length > 0) { historicoUndo.push(acaoAtual); if (historicoUndo.length > 30) historicoUndo.shift(); historicoRedo.length = 0; } acaoAtual = null; }
+
+function finalizarAcao() { 
+    if (!acaoAtual) return; 
+    if (acaoAtual.add.length > 0 || acaoAtual.rem.length > 0 || acaoAtual.paint.length > 0 || acaoAtual.move.length > 0) { 
+        historicoUndo.push(acaoAtual); 
+        if (historicoUndo.length > 30) {
+            const descartada = historicoUndo.shift();
+            descartada.rem.forEach(item => liberarMemoriaMesh(item.obj.mesh));
+        }
+        historicoRedo.forEach(acao => acao.add.forEach(item => liberarMemoriaMesh(item.obj.mesh)));
+        historicoRedo.length = 0; 
+    } 
+    acaoAtual = null; 
+    salvarAutosave();
+}
 
 export function desfazer() {
     if (historicoUndo.length === 0) { showAviso("Nada para desfazer."); return; } const acao = historicoUndo.pop();
@@ -212,6 +286,7 @@ export function desfazer() {
         acao.add.forEach(item => { scene.remove(item.obj.mesh); const idx = item.arrayBase.indexOf(item.obj); if(idx > -1) item.arrayBase.splice(idx, 1); if (item.obj.comodoId) { const c = comodosConstruidos.find(x => x.id === item.obj.comodoId); if (c) { if (item.tipo === 'parede') c.paredes = c.paredes.filter(x => x !== item.obj); if (item.tipo === 'pilar') c.pilares = c.pilares.filter(x => x !== item.obj); } } });
         acao.rem.reverse().forEach(item => { scene.add(item.obj.mesh); item.arrayBase.splice(item.indexInsercao, 0, item.obj); if (item.obj.comodoId) { let c = comodosConstruidos.find(x => x.id === item.obj.comodoId); if (!c) { c = {id: item.obj.comodoId, paredes:[], pilares:[]}; comodosConstruidos.push(c); } if (item.tipo === 'parede') c.paredes.push(item.obj); if (item.tipo === 'pilar') c.pilares.push(item.obj); } });
         historicoRedo.push(acao); atualizarVisibilidadeAndares(); limparSelecao(); notificarMudancaAndar(configsCamera.nivel); showAviso("Desfazer (Undo)");
+        salvarAutosave();
     } catch(e) { console.error("Erro ao desfazer:", e); }
 }
 
@@ -223,6 +298,7 @@ export function refazer() {
         acao.add.forEach(item => { scene.add(item.obj.mesh); item.arrayBase.push(item.obj); if (item.obj.comodoId) { let c = comodosConstruidos.find(x => x.id === item.obj.comodoId); if (!c) { c = {id: item.obj.comodoId, paredes:[], pilares:[]}; comodosConstruidos.push(c); } if (item.tipo === 'parede') c.paredes.push(item.obj); if (item.tipo === 'pilar') c.pilares.push(item.obj); } });
         acao.rem.forEach(item => { scene.remove(item.obj.mesh); const idx = item.arrayBase.indexOf(item.obj); if(idx > -1) item.arrayBase.splice(idx, 1); if (item.obj.comodoId) { const c = comodosConstruidos.find(x => x.id === item.obj.comodoId); if (c) { if (item.tipo === 'parede') c.paredes = c.paredes.filter(x => x !== item.obj); if (item.tipo === 'pilar') c.pilares = c.pilares.filter(x => x !== item.obj); } } });
         historicoUndo.push(acao); atualizarVisibilidadeAndares(); limparSelecao(); notificarMudancaAndar(configsCamera.nivel); showAviso("Refazer (Redo)");
+        salvarAutosave();
     } catch(e) { console.error("Erro ao refazer:", e); }
 }
 
@@ -271,7 +347,6 @@ function raycastPlanoBase(clientX, clientY) {
     return null; 
 }
 
-// 🔥 ARMADURA ANTI-CRASH TOTAL DO RAYCASTER 🔥
 function raycastObjetosDoNivel(clientX, clientY) { 
     mouseNdc.x = (clientX / window.innerWidth) * 2 - 1; mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1; 
     raycaster.setFromCamera(mouseNdc, camera); 
@@ -306,9 +381,7 @@ function raycastObjetosDoNivel(clientX, clientY) {
     try {
         const hits = raycaster.intersectObjects(objetosLimpos, true); 
         return hits.length ? hits[0] : null; 
-    } catch (err) {
-        return null; // Silencia o erro 100%
-    }
+    } catch (err) { return null; }
 }
 
 export function resetarEstadoConstrucao() { setModoAtivo(null); }
@@ -355,25 +428,15 @@ function atualizarGeometriaParede(parede) { const dx = parede.bx - parede.ax, dz
 function atualizarGeometriaPilar(pilar) { const alturaBase = pilar.nivel * obterAltura(); pilar.mesh.position.set(pilar.x, alturaBase + pilar.altura/2, pilar.z); }
 function obterOuCriarPilar(x, z, altura, isCerca, comodoId = null) { let pilar = pilaresConstruidos.find(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.z - z) < 0.01 && p.nivel === configsCamera.nivel && p.comodoId === comodoId); if (!pilar) { const mat = isCerca ? materialCerca : materialParede; const materiais = [mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone(), mat.clone()]; const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, altura, 0.25), materiais); const alturaBase = configsCamera.nivel * obterAltura(); mesh.position.set(x, alturaBase + altura / 2, z); scene.add(mesh); pilar = { mesh, x, z, altura, nivel: configsCamera.nivel, comodoId }; pilaresConstruidos.push(pilar); registrarAdicao('pilar', pilar, pilaresConstruidos); if (comodoId) { const c = comodosConstruidos.find(com => com.id === comodoId); if (c) c.pilares.push(pilar); } } return pilar; }
 
-// 🔥 A NOVA MATEMÁTICA QUE GARANTE QUE O TELHADO COMBINE COM A SALA E SEJA GERADO 🔥
 function verificarSalasFechadas(px, pz, pontoA) {
     const pontosTeste = [];
     const cx = (pontoA.x + px)/2; const cz = (pontoA.z + pz)/2;
-    
     if (['retangulo', 'triangulo', 'octogono'].includes(modoAtivo)) { 
-        pontosTeste.push({ x: cx, z: cz }); 
-        pontosTeste.push({ x: cx + 0.5, z: cz + 0.5 });
-        pontosTeste.push({ x: cx - 0.5, z: cz - 0.5 });
-        pontosTeste.push({ x: cx + 0.5, z: cz - 0.5 });
-        pontosTeste.push({ x: cx - 0.5, z: cz + 0.5 });
+        pontosTeste.push({ x: cx, z: cz }); pontosTeste.push({ x: cx + 0.5, z: cz + 0.5 }); pontosTeste.push({ x: cx - 0.5, z: cz - 0.5 }); pontosTeste.push({ x: cx + 0.5, z: cz - 0.5 }); pontosTeste.push({ x: cx - 0.5, z: cz + 0.5 });
     } else if (modoAtivo === 'parede') {
-        const angle = Math.atan2(px - pontoA.x, pz - pontoA.z);
-        const nx = Math.cos(angle) * configMapa.tamanhoGrid;
-        const nz = -Math.sin(angle) * configMapa.tamanhoGrid;
-        pontosTeste.push({ x: cx + nx, z: cz + nz });
-        pontosTeste.push({ x: cx - nx, z: cz - nz });
+        const angle = Math.atan2(px - pontoA.x, pz - pontoA.z); const nx = Math.cos(angle) * configMapa.tamanhoGrid; const nz = -Math.sin(angle) * configMapa.tamanhoGrid;
+        pontosTeste.push({ x: cx + nx, z: cz + nz }); pontosTeste.push({ x: cx - nx, z: cz - nz });
     }
-
     let telhadoGerado = false;
     for (const pt of pontosTeste) {
         if (telhadoGerado) break;
@@ -425,9 +488,12 @@ function criarTelhado(ax, az, bx, bz, alturaTelhado = 3.0, targetNivel = configs
     reconstruirTelhadoPiramide(telhado); telhadosConstruidos.push(telhado); registrarAdicao('telhado', telhado, telhadosConstruidos); 
 }
 
-// 🔥 TRANSFORMAÇÃO MATEMÁTICA QUE ALINHA E DESINVERTE OS TELHADOS 🔥
 export function reconstruirTelhadoPiramide(telhado) {
-    while(telhado.mesh.children.length > 0) { telhado.mesh.remove(telhado.mesh.children[0]); }
+    while(telhado.mesh.children.length > 0) { 
+        const c = telhado.mesh.children[0];
+        liberarMemoriaMesh(c);
+        telhado.mesh.remove(c); 
+    }
     const w = telhado.largura; const d = telhado.profundidade; const h = telhado.alturaTelhado;
     
     let segments = 4;
@@ -438,14 +504,9 @@ export function reconstruirTelhadoPiramide(telhado) {
     if (segments === 4) {
         geo.rotateY(Math.PI / 4);
     } else if (segments === 3) {
-        // Gira 90º para inverter a ponta, esmaga nos eixos X e Z para encaixar perfeitamente e centraliza
-        geo.rotateY(Math.PI / 2);
-        geo.scale(0.81649658, 1, 0.942809);
-        geo.translate(0, 0, 0.166666);
+        geo.rotateY(Math.PI / 2); geo.scale(0.81649658, 1, 0.942809); geo.translate(0, 0, 0.166666);
     } else if (segments === 8) {
-        // Gira 22.5º para alinhar as paredes planas do octógono aos eixos e esmaga para encaixar
-        geo.rotateY(Math.PI / 8);
-        geo.scale(0.765366, 1, 0.765366);
+        geo.rotateY(Math.PI / 8); geo.scale(0.765366, 1, 0.765366);
     }
     
     const matBase = telhado.textura ? gerarMaterialPintura(telhado.textura, Math.max(1, w/configMapa.tamanhoGrid), Math.max(1, d/configMapa.tamanhoGrid)) : materialTelhadoPadrão.clone();
@@ -462,7 +523,7 @@ export function reconstruirTelhadoPiramide(telhado) {
 }
 
 function criarEscada(ax, az, bx, bz, alturaAndar, largura = configMapa.tamanhoGrid, targetNivel = configsCamera.nivel) { const dx = bx - ax, dz = bz - az; const comp = Math.hypot(dx, dz); if (comp < 0.5) return; const escadaMesh = new THREE.Group(); const id = Date.now() + Math.random(); const escada = { id, mesh: escadaMesh, ax, az, bx, bz, alturaAndar, largura, nivel: targetNivel, textura: null, isEscada: true }; reconstruirDegrausEscada(escada, largura); escadasConstruidas.push(escada); registrarAdicao('escada', escada, escadasConstruidas); }
-export function reconstruirDegrausEscada(escada, novaLargura) { escada.largura = novaLargura; while(escada.mesh.children.length > 0){ escada.mesh.remove(escada.mesh.children[0]); } const dx = escada.bx - escada.ax, dz = escada.bz - escada.az; const comp = Math.hypot(dx, dz); const degraus = Math.max(3, Math.floor(comp / (configMapa.tamanhoGrid / 2))); const angle = Math.atan2(dx, dz); for (let i = 0; i < degraus; i++) { const stepD = comp / degraus, stepH = escada.alturaAndar / degraus; const mat = escada.textura ? gerarMaterialPintura(escada.textura, configMapa.tamanhoGrid, configMapa.tamanhoGrid) : materialPiso.clone(); const mesh = new THREE.Mesh(new THREE.BoxGeometry(escada.largura - 0.002, stepH * (i + 1), stepD - 0.002), mat); mesh.position.set(0, (stepH * (i + 1)) / 2 + 0.001, (i * stepD) - comp/2 + stepD/2); escada.mesh.add(mesh); } const alturaBase = escada.nivel * escada.alturaAndar; escada.mesh.position.set((escada.ax+escada.bx)/2, alturaBase, (escada.az+escada.bz)/2); escada.mesh.rotation.y = angle; if(!scene.children.includes(escada.mesh)) scene.add(escada.mesh); if (escadaSelecionada === escada) { escada.mesh.children.forEach(c => applyEmissive(c, 0x2a2a2a)); } }
+export function reconstruirDegrausEscada(escada, novaLargura) { escada.largura = novaLargura; while(escada.mesh.children.length > 0){ const c = escada.mesh.children[0]; liberarMemoriaMesh(c); escada.mesh.remove(c); } const dx = escada.bx - escada.ax, dz = escada.bz - escada.az; const comp = Math.hypot(dx, dz); const degraus = Math.max(3, Math.floor(comp / (configMapa.tamanhoGrid / 2))); const angle = Math.atan2(dx, dz); for (let i = 0; i < degraus; i++) { const stepD = comp / degraus, stepH = escada.alturaAndar / degraus; const mat = escada.textura ? gerarMaterialPintura(escada.textura, configMapa.tamanhoGrid, configMapa.tamanhoGrid) : materialPiso.clone(); const mesh = new THREE.Mesh(new THREE.BoxGeometry(escada.largura - 0.002, stepH * (i + 1), stepD - 0.002), mat); mesh.position.set(0, (stepH * (i + 1)) / 2 + 0.001, (i * stepD) - comp/2 + stepD/2); escada.mesh.add(mesh); } const alturaBase = escada.nivel * escada.alturaAndar; escada.mesh.position.set((escada.ax+escada.bx)/2, alturaBase, (escada.az+escada.bz)/2); escada.mesh.rotation.y = angle; if(!scene.children.includes(escada.mesh)) scene.add(escada.mesh); if (escadaSelecionada === escada) { escada.mesh.children.forEach(c => applyEmissive(c, 0x2a2a2a)); } }
 
 function executarMarreta(hitObject) { 
   if (!hitObject || hitObject === meshChaoBase || hitObject === meshChaoMasmorra) return; 
@@ -507,6 +568,32 @@ canvas?.addEventListener('pointerdown', e => {
 
   const isRemocao = e.ctrlKey || e.metaKey || e.button === 2;
 
+  if (modoAtivo === 'telhado') {
+      if (isRemocao) {
+          const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
+          if (hitAll) executarMarreta(hitAll.object);
+          return;
+      }
+      const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY);
+      const chaoHit = raycastPlanoBase(e.clientX, e.clientY);
+      const clickPoint = hitAll ? hitAll.point : (chaoHit ? chaoHit.point : null);
+      if (clickPoint) {
+          let startX = snapCentroCelula(clickPoint.x); let startZ = snapCentroCelula(clickPoint.z);
+          const { celulas, fechada } = encontrarAreaFechada(startX, startZ);
+          if (fechada && celulas.length > 0 && celulas.length < 5000) {
+              let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+              const t = configMapa.tamanhoGrid;
+              celulas.forEach(c => { minX = Math.min(minX, c.x - t/2); maxX = Math.max(maxX, c.x + t/2); minZ = Math.min(minZ, c.z - t/2); maxZ = Math.max(maxZ, c.z + t/2); });
+              minX -= 0.25; maxX += 0.25; minZ -= 0.25; maxZ += 0.25; 
+              const cx = (minX + maxX)/2; const cz = (minZ + maxZ)/2;
+              const existe = telhadosConstruidos.find(t => t.nivel === configsCamera.nivel && Math.abs((t.ax+t.bx)/2 - cx) < 0.1 && Math.abs((t.az+t.bz)/2 - cz) < 0.1);
+              if(!existe) { iniciarAcao(); criarTelhado(minX, minZ, maxX, maxZ, 3.0, configsCamera.nivel, 'retangulo'); finalizarAcao(); showAviso("Telhado gerado! Selecione a Mãozinha para ajustar a altura."); } 
+              else { showAviso("Já existe um telhado nesta sala."); }
+          } else { showAviso("Clique dentro de um cômodo fechado para criar o telhado!"); }
+      }
+      return;
+  }
+
   if (!modoAtivo && !isRemocao && !e.altKey && !e.shiftKey) {
       if (grupoSetas.visible) {
           raycaster.setFromCamera(mouseNdc, camera); const hitsSetas = raycaster.intersectObjects(grupoSetas.children);
@@ -525,12 +612,8 @@ canvas?.addEventListener('pointerdown', e => {
       if (hitAll && hitAll.object !== meshChaoBase && hitAll.object !== meshChaoMasmorra) {
           const isEscada = escadasConstruidas.find(esc => esc.mesh === hitAll.object.parent);
           if (isEscada) { limparSelecao(); escadaSelecionada = isEscada; escadaSelecionada.mesh.children.forEach(c => applyEmissive(c, 0x2a2a2a)); mostrarGizmo(e.clientX, e.clientY, 'escada'); return; }
-          
-          // Se clica num telhado (inclusive triângulos ou octógonos), mostra o Gizmo e seleciona
           const isTelhado = getRootTelhado(hitAll.object);
           if (isTelhado) { limparSelecao(); telhadoSelecionado = isTelhado; telhadoSelecionado.mesh.children.forEach(c => applyEmissive(c, 0x2a2a2a)); mostrarGizmo(e.clientX, e.clientY, 'telhado'); return; }
-          
-          // Se clica em qualquer parede (diagonal ou não), aciona o gizmo da sala
           const objClicado = paredesConstruidas.find(p => p.mesh === hitAll.object) || pilaresConstruidos.find(p => p.mesh === hitAll.object);
           if (objClicado && objClicado.comodoId) { limparSelecao(); comodoSelecionado = comodosConstruidos.find(c => c.id === objClicado.comodoId); if (comodoSelecionado) { comodoSelecionado.paredes.forEach(p => applyEmissive(p.mesh, 0x2a2a2a)); mostrarGizmo(e.clientX, e.clientY, 'comodo'); atualizarSetasResize(); return; } }
       }
@@ -549,7 +632,6 @@ canvas?.addEventListener('pointerdown', e => {
 
   if (modoAtivo === 'coluna') { if(e.button === 2) return; const hit = raycastPlanoBase(e.clientX, e.clientY); if (hit) { const pt = clampHit(hit.point); criarColunaSustentacao(snapGrid(pt.x), snapGrid(pt.z), obterAltura()); showAviso("🏛️ Coluna instalada!"); } return; }
 
-  // 🔥 SISTEMA DE PINTURA (Preencher Tudo Shift e Apagar Direito) 🔥
   if (modoAtivo === 'pintura') {
       const isPipeta = e.altKey;
       const hitAll = raycastObjetosDoNivel(e.clientX, e.clientY); const chaoHit = raycastPlanoBase(e.clientX, e.clientY);
@@ -586,10 +668,7 @@ canvas?.addEventListener('pointerdown', e => {
 
           if (targetObject && (isParede || isPilar)) {
              celulas.forEach(c => { [['x',1],['x',-1],['z',1],['z',-1]].forEach(([eixo, dir]) => { const dx = eixo==='x' ? configMapa.tamanhoGrid * dir : 0, dz = eixo==='z' ? configMapa.tamanhoGrid * dir : 0; const p = paredeQueBloqueia(c.x, c.z, c.x + dx, c.z + dz); if (p && !p.isPorta && !p.isCerca) { const dirNorm = new THREE.Vector3(c.x - p.mesh.position.x, 0, c.z - p.mesh.position.z).normalize(); if (isRemocao) { removerPinturaFacePorNormal(p.mesh, dirNorm, materialParede); if (p.pilarA) removerPinturaFacePorNormal(p.pilarA.mesh, dirNorm, materialParede); if (p.pilarB) removerPinturaFacePorNormal(p.pilarB.mesh, dirNorm, materialParede); } else { pintarFacePorNormalMundial(p.mesh, dirNorm, item); if (p.pilarA) pintarFacePorNormalMundial(p.pilarA.mesh, dirNorm, item); if (p.pilarB) pintarFacePorNormalMundial(p.pilarB.mesh, dirNorm, item); } } }); });
-          } else { 
-              // Pintura de Chão: Pode pintar inclusive mundos abertos graças à remoção da trava!
-              celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); 
-          }
+          } else { celulas.forEach(c => { if (isRemocao) removerPiso(c.x, c.z); else aplicarPiso(c.x, c.z, item); }); }
       } else {
           if (isTelhado) { 
               isTelhado.mesh.children.forEach(piramide => { registrarPintura(piramide); piramide.material = isRemocao ? [materialTelhadoPadrão.clone(), new THREE.MeshBasicMaterial({ color: 0x000000, visible: false })] : [gerarMaterialPintura(item, Math.max(1, isTelhado.largura/configMapa.tamanhoGrid), Math.max(1, isTelhado.profundidade/configMapa.tamanhoGrid)), new THREE.MeshBasicMaterial({ color: 0x000000, visible: false })]; finalizarPintura(piramide); });
@@ -710,7 +789,7 @@ canvas?.addEventListener('pointermove', e => {
     if (isErasePreview) { cursor3D.material = materialMarreta; } else if (modoAtivo === 'coluna' || modoAtivo === 'escada' || modoAtivo === 'escada_baixo') { cursor3D.material = materialPreviaEscada; } else { cursor3D.material = materialCursor; }
     
     cursor3D.scale.set(configMapa.tamanhoGrid, configMapa.tamanhoGrid, 1);
-    if (modoAtivo === 'pintura') { cursor3D.position.set(snapCentroCelula(pt.x), alturaBase + 0.02, snapCentroCelula(pt.z)); } 
+    if (modoAtivo === 'pintura' || modoAtivo === 'telhado') { cursor3D.position.set(snapCentroCelula(pt.x), alturaBase + (modoAtivo==='telhado' ? obterAltura() : 0) + 0.02, snapCentroCelula(pt.z)); } 
     else { cursor3D.position.set(px, alturaBase + 0.02, pz); }
     cursor3D.visible = true;
 
@@ -791,7 +870,6 @@ function setOpacity(mesh, isTransparent, opacity) {
     else if (mesh.material) { if (mesh.material.transparent !== isTransparent) mesh.material.needsUpdate = true; mesh.material.transparent = isTransparent; mesh.material.opacity = opacity; } 
 }
 
-// 🔥 NOVO CUTAWAY APLICADO A TODOS OS ANDARES E TELHADOS INFERIORES VISÍVEIS 🔥
 export function atualizarVisibilidadeAndares(modoVisaoManual) {
   if (modoVisaoManual) modoVisaoAtual = modoVisaoManual; 
   const alturaAtual = configsCamera.nivel * obterAltura();
@@ -807,7 +885,6 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
       if (obj.nivel > configsCamera.nivel) { 
           obj.mesh.visible = false; 
       } else { 
-          // Aplica as regras de parede para o andar atual E para os andares inferiores
           obj.mesh.visible = true; 
           if (modoVisaoAtual === 'full') { 
               obj.mesh.scale.y = 1; obj.mesh.position.y = (obj.nivel * obj.altura) + (obj.altura / 2); setOpacity(obj.mesh, false, 1); 
@@ -851,11 +928,9 @@ export function atualizarVisibilidadeAndares(modoVisaoManual) {
       if (obj.nivel > configsCamera.nivel) { 
           obj.mesh.visible = false; 
       } else if (obj.nivel === configsCamera.nivel) { 
-          // Oculta o telhado do andar em que estamos jogando (exceto se visão full)
           if (modoVisaoAtual === 'full') { obj.mesh.visible = true; setOpacity(obj.mesh, false, 1); } 
           else { obj.mesh.visible = false; } 
       } else { 
-          // Solução Maxis: Trata o telhado do andar inferior como "chão" visível
           obj.mesh.visible = true; 
           setOpacity(obj.mesh, false, 1); 
       } 
