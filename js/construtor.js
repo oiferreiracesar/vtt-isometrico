@@ -515,7 +515,7 @@ export function reconstruirTelhadoPiramide(telhado) {
         geo.rotateY(Math.PI / 8); geo.scale(0.765366, 1, 0.765366);
     }
     
-    // CORREÇÃO CRÍTICA: Atualiza o "hitbox" invisível do telhado para o mouse não passar reto
+    // CORREÇÃO CRÍTICA: Atualiza o hitbox invisível para o raycaster não passar reto
     geo.computeBoundingBox();
     geo.computeBoundingSphere();
     
@@ -523,7 +523,7 @@ export function reconstruirTelhadoPiramide(telhado) {
     const matBottom = new THREE.MeshBasicMaterial({ color: 0x000000, visible: false });
     const pyramid = new THREE.Mesh(geo, [matBase, matBottom]);
     pyramid.scale.set(w, h, d);
-    pyramid.updateMatrixWorld(); // Força o motor a reconhecer a nova escala física
+    pyramid.updateMatrixWorld(); // Sincroniza a posição e escala na força bruta
     
     const alturaBase = (telhado.nivel * obterAltura()) + obterAltura();
     telhado.mesh.position.set((telhado.ax + telhado.bx)/2, alturaBase + (h / 2), (telhado.az + telhado.bz)/2);
