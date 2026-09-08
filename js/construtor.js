@@ -347,13 +347,14 @@ function raycastPlanoBase(clientX, clientY) {
     return null; 
 }
 
-// 🔥 ARMADURA ANTI-CRASH TOTAL DO RAYCASTER (CORRIGIDO) 🔥
+// 🔥 ARMADURA ANTI-CRASH E INTERCEPTAÇÃO UNIVERSAL DO RAYCASTER 🔥
 function raycastObjetosDoNivel(clientX, clientY) { 
     mouseNdc.x = (clientX / window.innerWidth) * 2 - 1; mouseNdc.y = -(clientY / window.innerHeight) * 2 + 1; 
     raycaster.setFromCamera(mouseNdc, camera); 
     
     const objetosNivel = [];
-    // Correção: Agora o mouse enxerga TUDO o que está visível, e não apenas o do andar atual
+    
+    // Regra nova: se está visível na tela, o mouse precisa interceptar (independente do nível)
     paredesConstruidas.forEach(p => { if (p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
     pilaresConstruidos.forEach(p => { if (p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
     pisosConstruidos.forEach(p => { if (p.mesh && p.mesh.visible) objetosNivel.push(p.mesh); });
@@ -365,26 +366,26 @@ function raycastObjetosDoNivel(clientX, clientY) {
     if (configsCamera.nivel < 0 && meshChaoMasmorra && meshChaoMasmorra.visible) objetosNivel.push(meshChaoMasmorra); 
     
     const objetosLimpos = objetosNivel.filter(obj => {
-        if (!obj || !obj.isObject3D) return false;
-        // Cura silenciosa das faces da parede sem excluir o objeto do radar
+        if (!obj) return false;
+        let valid = true;
         obj.traverse(child => {
             if (child.isMesh) {
-                if (!child.material) child.material = materialParede.clone();
+                if (!child.material) valid = false;
                 else if (Array.isArray(child.material)) {
-                    for (let i = 0; i < child.material.length; i++) {
-                        if (!child.material[i]) child.material[i] = materialParede.clone();
-                    }
+                    child.material.forEach(m => { if (!m || typeof m.side === 'undefined') valid = false; });
+                } else if (typeof child.material.side === 'undefined') {
+                    valid = false;
                 }
             }
         });
-        return true; // Garante que a parede nunca seja ignorada pelo clique
+        return valid;
     });
 
     try {
         const hits = raycaster.intersectObjects(objetosLimpos, true); 
         return hits.length ? hits[0] : null; 
     } catch (err) {
-        console.warn("Raycast salvo pelo Anti-Crash!");
+        console.error("Raycast salvo pelo Anti-Crash!");
         return null; 
     }
 }
