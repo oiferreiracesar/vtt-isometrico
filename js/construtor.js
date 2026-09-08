@@ -388,7 +388,7 @@ function raycastObjetosDoNivel(clientX, clientY) {
         console.error("Raycast salvo pelo Anti-Crash!");
         return null; 
     }
-}
+} 
 
 export function resetarEstadoConstrucao() { setModoAtivo(null); }
 
